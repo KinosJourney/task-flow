@@ -1,0 +1,34 @@
+appId: com.taskflow.desktop
+productName: TaskFlow
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - out/**
+  - package.json
+  - '!node_modules/**/{test,__tests__,tests,example,examples,docs,doc}/**'
+
+# 迁移文件不进 asar，运行时从 resources/drizzle 读取（src/main/db/migrate.ts）
+extraResources:
+  - from: drizzle
+    to: drizzle
+
+# 原生 .node 无法从 asar 归档中加载（architecture.md 5.3）
+asar: true
+asarUnpack:
+  - '**/node_modules/better-sqlite3/**'
+
+# 让 electron-builder 针对 Electron ABI 重建 better-sqlite3
+npmRebuild: true
+
+mac:
+  category: public.app-category.productivity
+  # 不写死 arch：默认跟随本机（Intel -> release/mac，Apple Silicon -> release/mac-arm64）
+  target:
+    - dmg
+win:
+  target: nsis
+linux:
+  target: AppImage
+  category: Utility

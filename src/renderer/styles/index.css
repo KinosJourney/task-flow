@@ -1,0 +1,292 @@
+@import 'tailwindcss';
+
+@theme {
+  /* 不要命名为 base：会生成 text-base 颜色工具类，覆盖 Tailwind 的同名字号工具类 */
+  --color-paper: #fdf6e9;
+  --color-panel: #fffdf7;
+  --color-panel-alt: #fff4e0;
+  --color-ink: #241f1a;
+  --color-ink-soft: #6b6156;
+  --color-line: #241f1a;
+  --color-accent: #ff5d3b;
+  --color-accent-soft: #ffd9cf;
+  --color-pop: #ffd43b;
+
+  --font-display: 'Baloo 2', 'Comic Sans MS', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+  --font-body: 'PingFang SC', 'Microsoft YaHei', system-ui, -apple-system, sans-serif;
+
+  --radius-panel: 14px;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+    background-image:
+      radial-gradient(var(--color-accent-soft) 1px, transparent 1px);
+    background-size: 18px 18px;
+    background-attachment: fixed;
+  }
+
+  h1,
+  h2,
+  h3,
+  .font-display {
+    font-family: var(--font-display);
+    letter-spacing: 0.01em;
+  }
+
+  ::selection {
+    background: var(--color-pop);
+  }
+}
+
+@layer components {
+  /* 漫画分镜卡片：粗黑描边 + 硬投影 */
+  .panel {
+    background: var(--color-panel);
+    border: 3px solid var(--color-line);
+    border-radius: var(--radius-panel);
+    box-shadow: 6px 6px 0 0 var(--color-line);
+  }
+
+  .panel-flat {
+    background: var(--color-panel);
+    border: 3px solid var(--color-line);
+    border-radius: var(--radius-panel);
+  }
+
+  .panel-hover {
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+  }
+  .panel-hover:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: 8px 8px 0 0 var(--color-line);
+  }
+
+  /* 网点纹理 */
+  .halftone {
+    background-image: radial-gradient(var(--color-line) 1.4px, transparent 1.5px);
+    background-size: 9px 9px;
+    opacity: 0.12;
+  }
+
+  /* 漫画按钮 */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    font-family: var(--font-display);
+    font-weight: 700;
+    border: 3px solid var(--color-line);
+    border-radius: 10px;
+    padding: 0.5rem 1rem;
+    background: var(--color-panel);
+    color: var(--color-ink);
+    box-shadow: 3px 3px 0 0 var(--color-line);
+    cursor: pointer;
+    transition: transform 0.08s ease, box-shadow 0.08s ease;
+    user-select: none;
+  }
+  .btn:hover {
+    transform: translate(-1px, -1px);
+    box-shadow: 4px 4px 0 0 var(--color-line);
+  }
+  .btn:active {
+    transform: translate(2px, 2px);
+    box-shadow: 0 0 0 0 var(--color-line);
+  }
+  .btn-accent {
+    background: var(--color-accent);
+    color: #fff;
+  }
+  .btn-pop {
+    background: var(--color-pop);
+  }
+  .btn-sm {
+    padding: 0.3rem 0.7rem;
+    font-size: 0.85rem;
+    box-shadow: 2px 2px 0 0 var(--color-line);
+  }
+
+  /* 语音气泡：尖角朝左，指向左侧的助手角色 */
+  .bubble {
+    position: relative;
+    background: var(--color-panel);
+    border: 3px solid var(--color-line);
+    border-radius: 16px;
+    padding: 0.75rem 1rem;
+    box-shadow: 4px 4px 0 0 var(--color-line);
+  }
+  /* 旋转 45° 的方块：自身底色盖住气泡描边，两条边留出尖角轮廓 */
+  .bubble::after {
+    content: '';
+    position: absolute;
+    left: -9px;
+    top: 20px;
+    width: 15px;
+    height: 15px;
+    background: var(--color-panel);
+    border-left: 3px solid var(--color-line);
+    border-bottom: 3px solid var(--color-line);
+    border-bottom-left-radius: 3px;
+    transform: rotate(45deg);
+  }
+
+  /* 速度线（进行中） */
+  .speedlines {
+    background-image: repeating-linear-gradient(
+      -45deg,
+      transparent 0 6px,
+      var(--color-accent-soft) 6px 8px
+    );
+  }
+
+  /* 橡皮章：全部达成时盖在卡片上，双线描边 + 落章动画 */
+  .stamp {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    font-family: var(--font-display);
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-accent);
+    border: 3px solid var(--color-accent);
+    outline: 2px solid var(--color-accent);
+    outline-offset: 3px;
+    border-radius: 10px;
+    padding: 0.25rem 0.8rem;
+    opacity: 0.9;
+    /* 让章面与下方文字叠印，像真盖在纸上 */
+    mix-blend-mode: multiply;
+    pointer-events: none;
+    user-select: none;
+    transform: rotate(-12deg);
+    animation: stamp-in 0.32s ease-out;
+  }
+
+  /* 手写批注：想法/问题/备注/链接，视觉上明确区别于任务行 */
+  .annotation {
+    background: var(--color-panel);
+    border: 2.5px dashed var(--color-line);
+    border-radius: 12px;
+    transform: rotate(-0.4deg);
+  }
+  .annotation:nth-child(even) {
+    transform: rotate(0.5deg);
+  }
+
+  /* 抽屉内的小分镜：比 .panel 轻，无硬投影 */
+  .subpanel {
+    background: var(--color-panel);
+    border: 2.5px solid var(--color-line);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  /* 抽屉/详情里的输入控件，保持描边风格 */
+  .field {
+    background: #fff;
+    border: 2.5px solid var(--color-line);
+    border-radius: 9px;
+    padding: 0.3rem 0.55rem;
+    font-size: 0.85rem;
+    color: var(--color-ink);
+    font-family: inherit;
+  }
+  .field:focus-visible {
+    outline: 3px solid var(--color-accent);
+    outline-offset: 1px;
+  }
+
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 0.1rem 0.5rem;
+    border-radius: 999px;
+    border: 2px solid var(--color-line);
+    color: #fff;
+    line-height: 1.4;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+@keyframes pop-in {
+  0% {
+    transform: scale(0.6) rotate(-6deg);
+    opacity: 0;
+  }
+  70% {
+    transform: scale(1.08) rotate(2deg);
+  }
+  100% {
+    transform: scale(1) rotate(0);
+    opacity: 1;
+  }
+}
+.animate-pop {
+  animation: pop-in 0.35s ease-out;
+}
+
+@keyframes slide-in-right {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+.animate-slide-in {
+  animation: slide-in-right 0.18s ease-out;
+}
+
+/* 气泡文案轮换：轻淡入，不做缩放，避免文字抖动 */
+@keyframes bubble-swap {
+  0% {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-bubble-swap {
+  animation: bubble-swap 0.28s ease-out;
+}
+
+/* 从大到小砸下去再回弹，模拟盖章 */
+@keyframes stamp-in {
+  0% {
+    transform: rotate(-12deg) scale(2.2);
+    opacity: 0;
+  }
+  60% {
+    transform: rotate(-12deg) scale(0.92);
+    opacity: 1;
+  }
+  100% {
+    transform: rotate(-12deg) scale(1);
+    opacity: 0.9;
+  }
+}
