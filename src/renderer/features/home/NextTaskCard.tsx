@@ -4,7 +4,7 @@ import { ModuleTag } from '@/components/comic/ModuleTag';
 import { Assistant } from '@/components/assistant/Assistant';
 import { Mascot } from '@/components/assistant/Mascot';
 import { useCompleteTask, useNextTask, usePinNextTask } from '@/features/queries';
-import { useTaskDrawer } from '@/features/task/useTaskDrawer';
+import { useTaskFocus } from '@/features/outline/useTaskFocus';
 import { formatDuration, formatStopwatch } from '@/lib/format';
 import { useStopwatch } from '@/lib/useStopwatch';
 import type { NextRule } from '@shared/types';
@@ -27,7 +27,7 @@ export function NextTaskCard() {
   const { elapsedMs, reset: resetTimer } = useStopwatch(timing);
   const complete = useCompleteTask();
   const pinNext = usePinNextTask();
-  const drawer = useTaskDrawer();
+  const taskFocus = useTaskFocus();
 
   const task = data?.task ?? null;
   const reason = data?.reason ?? null;
@@ -117,7 +117,7 @@ export function NextTaskCard() {
               <Button icon="🔄" onClick={handleSwap}>
                 换一个
               </Button>
-              <Button icon="🔍" onClick={() => drawer.open(task.id)}>
+              <Button icon="🔍" onClick={() => taskFocus.reveal(task)}>
                 查看上下文
               </Button>
             </div>

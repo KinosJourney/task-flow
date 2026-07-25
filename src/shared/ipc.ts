@@ -1,4 +1,5 @@
 import type {
+  CreateProjectInput,
   CreateTaskInput,
   DailyFocus,
   DbCheckResult,
@@ -6,10 +7,12 @@ import type {
   HomeSummary,
   ImportPreview,
   ModuleId,
+  MoveTaskInput,
   Note,
   NoteKind,
   NextTaskResult,
   PingResult,
+  Project,
   ProjectWithProgress,
   ScheduleEvent,
   Task,
@@ -17,7 +20,9 @@ import type {
   TaskNode,
   TimeEntry,
   TimelineData,
+  TodayBacklog,
   TodayQueueGroup,
+  UpdateProjectInput,
   UpdateTaskInput,
   WeeklyReview,
   WeeklySummary,
@@ -40,6 +45,30 @@ export type IpcResult<T> =
 export const CHANNELS = {
   systemPing: 'system.ping',
   systemDbCheck: 'system.dbCheck',
+
+  modulesList: 'modules.list',
+
+  projectsList: 'projects.list',
+  projectsCreate: 'projects.create',
+  projectsUpdate: 'projects.update',
+  projectsArchive: 'projects.archive',
+  projectsReorder: 'projects.reorder',
+
+  tasksTree: 'tasks.tree',
+  tasksGet: 'tasks.get',
+  tasksCreate: 'tasks.create',
+  tasksUpdate: 'tasks.update',
+  tasksMove: 'tasks.move',
+  tasksComplete: 'tasks.complete',
+  tasksReopen: 'tasks.reopen',
+  tasksDelete: 'tasks.delete',
+
+  notesListByTask: 'notes.listByTask',
+  notesCreate: 'notes.create',
+  notesUpdate: 'notes.update',
+  notesDelete: 'notes.delete',
+  notesConvertToTask: 'notes.convertToTask',
+  notesQuickCapture: 'notes.quickCapture',
 } as const;
 
 export type Channel = (typeof CHANNELS)[keyof typeof CHANNELS];
@@ -58,7 +87,13 @@ export interface Api {
     list(): Promise<IpcResult<import('./types').Module[]>>;
   };
   projects: {
+    /** 列表即详情的数据源：进度与累计时间都在这里，详情页再配一次 tasks.tree 就够了 */
     list(p?: { status?: 'active' | 'archived' }): Promise<IpcResult<ProjectWithProgress[]>>;
+    create(p: CreateProjectInput): Promise<IpcResult<Project>>;
+    update(p: UpdateProjectInput): Promise<IpcResult<Project>>;
+    /** 归档而非删除：任务与历史时间都留着，只是不再出现在活跃列表 */
+    archive(p: { id: string }): Promise<IpcResult<Project>>;
+    reorder(p: { orderedIds: string[] }): Promise<IpcResult<void>>;
   };
   tasks: {
     tree(p: { projectId: string }): Promise<IpcResult<TaskNode[]>>;
@@ -67,6 +102,8 @@ export interface Api {
     getNext(p: { now: number; excludeTaskId?: string }): Promise<IpcResult<NextTaskResult>>;
     create(p: CreateTaskInput): Promise<IpcResult<Task>>;
     update(p: UpdateTaskInput): Promise<IpcResult<Task>>;
+    /** 换父级/换项目/调同级顺序；超过三级返回 DEPTH_EXCEEDED */
+    move(p: MoveTaskInput): Promise<IpcResult<Task>>;
     complete(p: { id: string }): Promise<IpcResult<Task>>;
     reopen(p: { id: string }): Promise<IpcResult<Task>>;
     delete(p: { id: string }): Promise<IpcResult<void>>;
@@ -74,10 +111,17 @@ export interface Api {
     pinNext(p: { id: string | null }): Promise<IpcResult<void>>;
   };
   today: {
-    /** 按项目分块、块内展开子任务；散任务归入没有 projectId 的那一块 */
-    list(): Promise<IpcResult<TodayQueueGroup[]>>;
-    add(p: { taskId: string }): Promise<IpcResult<void>>;
-    remove(p: { taskId: string }): Promise<IpcResult<void>>;
+    /** 某天的队列，按项目分块、块内展开子任务；散任务归入没有 projectId 的那一块 */
+    list(p: { date: string }): Promise<IpcResult<TodayQueueGroup[]>>;
+    add(p: { taskId: string; date: string }): Promise<IpcResult<void>>;
+    remove(p: { taskId: string; date: string }): Promise<IpcResult<void>>;
+    /** `date` 之前还没做完的队列项。顺延是手动的，先让用户看见有多少 */
+    backlog(p: { before: string }): Promise<IpcResult<TodayBacklog>>;
+    /**
+     * 一键顺延：把遗留项插入 `date` 那天的队列，原来那天的行**保持不动**。
+     * 省略 `taskIds` 表示把 `date` 之前的全部遗留一次带过来。
+     */
+    carryOver(p: { date: string; taskIds?: string[] }): Promise<IpcResult<{ carriedCount: number }>>;
   };
   focus: {
     getDay(p: { date: string }): Promise<IpcResult<DailyFocus[]>>;
@@ -103,6 +147,7 @@ export interface Api {
   notes: {
     listByTask(p: { taskId: string }): Promise<IpcResult<Note[]>>;
     create(p: { taskId?: string; kind: NoteKind; content: string; url?: string }): Promise<IpcResult<Note>>;
+    update(p: { id: string; content?: string; url?: string | null }): Promise<IpcResult<Note>>;
     delete(p: { id: string }): Promise<IpcResult<void>>;
     /** 想法/问题转为正式任务，回填 convertedTaskId */
     convertToTask(p: { id: string; projectId?: string; moduleId?: ModuleId }): Promise<IpcResult<Task>>;
@@ -127,10 +172,11 @@ export interface Api {
 }
 
 /**
- * preload 按里程碑逐域实现 Api：已实现的域走真实 IPC，未实现的域
- * 由渲染进程回落到 mock（见 src/renderer/lib/api.ts）。
+ * preload 按里程碑逐个方法实现 Api：已实现的走真实 IPC，其余回落到 mock
+ * （见 src/renderer/lib/api.ts）。粒度是方法而不是整个域——像 `tasks` 这样
+ * 横跨两个里程碑的域（CRUD 在 M1、getNext 在 M2），否则没法分批接上去。
  */
-export type PartialApi = { [K in keyof Api]?: Api[K] };
+export type PartialApi = { [K in keyof Api]?: Partial<Api[K]> };
 
 declare global {
   interface Window {

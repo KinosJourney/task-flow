@@ -187,15 +187,7 @@
     transform: rotate(0.5deg);
   }
 
-  /* 抽屉内的小分镜：比 .panel 轻，无硬投影 */
-  .subpanel {
-    background: var(--color-panel);
-    border: 2.5px solid var(--color-line);
-    border-radius: 12px;
-    overflow: hidden;
-  }
-
-  /* 抽屉/详情里的输入控件，保持描边风格 */
+  /* 输入控件，保持描边风格 */
   .field {
     background: #fff;
     border: 2.5px solid var(--color-line);
@@ -248,17 +240,6 @@
   animation: pop-in 0.35s ease-out;
 }
 
-@keyframes slide-in-right {
-  from {
-    transform: translateX(100%);
-  }
-  to {
-    transform: translateX(0);
-  }
-}
-.animate-slide-in {
-  animation: slide-in-right 0.18s ease-out;
-}
 
 /* 气泡文案轮换：轻淡入，不做缩放，避免文字抖动 */
 @keyframes bubble-swap {

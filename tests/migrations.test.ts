@@ -34,4 +34,27 @@ describe('drizzle 迁移', () => {
     const sql = fs.readFileSync(path.join(drizzleDir, `${first!.tag}.sql`), 'utf8');
     expect(sql).toContain('CREATE TABLE `app_meta`');
   });
+
+  it('M1 的业务表都建出来了', () => {
+    const sql = allMigrationSql();
+    for (const table of ['modules', 'projects', 'tasks', 'task_events', 'notes']) {
+      expect(sql).toContain(`CREATE TABLE \`${table}\``);
+    }
+  });
+
+  it('三级限制落在数据库上，不只靠应用层校验', () => {
+    expect(allMigrationSql()).toMatch(/CHECK\("tasks"\."depth" between 1 and 3\)/);
+  });
+
+  it('队列归属不做成 tasks 的列（data-model 1.1：队列按天归属）', () => {
+    expect(allMigrationSql()).not.toContain('`in_today`');
+  });
 });
+
+function allMigrationSql(): string {
+  return fs
+    .readdirSync(drizzleDir)
+    .filter((f) => f.endsWith('.sql'))
+    .map((f) => fs.readFileSync(path.join(drizzleDir, f), 'utf8'))
+    .join('\n');
+}

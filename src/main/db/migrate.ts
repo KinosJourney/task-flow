@@ -3,6 +3,7 @@ import path from 'node:path';
 import { app } from 'electron';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import { getDb } from './connection';
+import { seedModules } from './seedModules';
 
 /**
  * 迁移文件所在目录。开发/未打包时在项目根的 drizzle/（相对已构建的
@@ -24,4 +25,5 @@ export function getMigrationsFolder(): string {
 /** 在建窗之前执行（architecture.md 第 4 节）。 */
 export function runMigrations(): void {
   migrate(getDb(), { migrationsFolder: getMigrationsFolder() });
+  seedModules();
 }

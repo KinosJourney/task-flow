@@ -45,10 +45,16 @@ export function isoDateOf(ts: number): string {
   return toIsoDate(new Date(ts));
 }
 
+/** 「7 月 26 日」 */
+export function formatMonthDay(iso: string): string {
+  const d = parseIsoDate(iso);
+  return `${d.getMonth() + 1} 月 ${d.getDate()} 日`;
+}
+
 /** 「7 月 26 日 · 周日」 */
 export function formatDateLabel(iso: string): string {
   const d = parseIsoDate(iso);
-  return `${d.getMonth() + 1} 月 ${d.getDate()} 日 · 周${WEEKDAYS[d.getDay()]}`;
+  return `${formatMonthDay(iso)} · 周${WEEKDAYS[d.getDay()]}`;
 }
 
 /** 近几天给个口语称呼，远了就没有，让日期切换器一眼看出自己在哪 */
@@ -75,9 +81,7 @@ export function weekStartOf(iso: string): string {
 }
 
 export function formatWeekRange(weekStart: string): string {
-  const a = parseIsoDate(weekStart);
-  const b = parseIsoDate(addDays(weekStart, 6));
-  return `${a.getMonth() + 1} 月 ${a.getDate()} 日 – ${b.getMonth() + 1} 月 ${b.getDate()} 日`;
+  return `${formatMonthDay(weekStart)} – ${formatMonthDay(addDays(weekStart, 6))}`;
 }
 
 export function relativeWeekName(weekStart: string): string | null {

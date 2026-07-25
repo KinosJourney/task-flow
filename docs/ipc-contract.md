@@ -62,8 +62,8 @@ type ProjectWithProgress = Project & {
 | 频道 | 入参 | 返回 | 语义 |
 | --- | --- | --- | --- |
 | `tasks.tree` | `{ projectId }` | `TaskNode[]` | 项目下的三级任务树 |
-| `tasks.get` | `{ id }` | `TaskFull` | 任务详情抽屉的数据源，见 3.2 |
-| `tasks.create` | `CreateTaskInput` | `Task` | 新建；有 `parentId` 时校验 `depth<=3`，否则 `DEPTH_EXCEEDED` |
+| `tasks.get` | `{ id }` | `TaskDetail` | 任务详情（含 notes、计时汇总） |
+| `tasks.create` | `CreateTaskInput` | `Task` | 新建；有 `parentId` 时校验 `depth<=3`，否则 `DEPTH_EXCEEDED`；`afterId` 表示插到某行之后 |
 | `tasks.update` | `{ id } & Partial<...>` | `Task` | 改标题/模块/截止/日程/所属项目 |
 | `tasks.complete` | `{ id }` | `Task` | 标记完成，记 `completed` 事件；返回后前端可请求下一个 |
 | `tasks.reopen` | `{ id }` | `Task` | 取消完成 |
@@ -72,18 +72,19 @@ type ProjectWithProgress = Project & {
 | `tasks.getNext` | `GetNextInput` | `NextTaskResult` | **核心**：推荐下一件任务 + 结构化理由 |
 | `tasks.pinNext` | `{ id: string \| null }` | `void` | 手动指定 Next Task（优先于全部自动规则）；`null` 取消指定 |
 
-### 3.1 tasks.get（任务详情抽屉的数据源）
+### 3.1 行内大纲编辑用到的频道
 
-任务详情抽屉（`ui-spec.md` 第 3 节）是任务的唯一编辑界面，一次请求拉齐它需要的全部内容，避免打开抽屉时并发四五个查询。
+任务在清单里直接编辑（`ui-spec.md` 第 3 节），键位对应的频道：
 
-```ts
-type TaskFull = TaskDetail & {
-  children: Task[];               // 只取直接子级：抽屉只展示一层，更深的层级由被点开的子任务自己展示
-  ancestors: { id: string; title: string }[];  // 根到父的面包屑
-};
-```
+| 键位 | 频道 | 说明 |
+| --- | --- | --- |
+| `Enter` | `tasks.create` + `tasks.move` | create 只会放到同级末尾，再 move 到 `{ position: 当前行序号 + 1 }`。`title` 有 `min(1)` 校验，所以新行用占位标题「新任务」 |
+| `Tab` | `tasks.move` | `{ id, parentId: 上一个同级任务, position: 新父级现有子级数 }` |
+| `⌫` / `Shift+Tab` | `tasks.move` | `{ id, parentId: 父级的父级, position: 原父级序号 + 1 }`；第一级的空行改调 `tasks.delete` |
+| 标题失焦 | `tasks.update` | `{ id, title }` |
+| `Shift+Enter` | `tasks.update` | `{ id, description }`，`null` 清空。描述是任务的字段，不是 `notes` |
 
-`TaskDetail` 已含 `projectName`、`totalTimeMs`、`notes`、`linkedFocusSlot`。计时分段另走 `timer.listByTask`（见第 6 节），因为它是唯一可能很长的列表。
+`tasks.move` 的三条不变式：连同后代一起改 `depth`；按新父级重写 `project_id`（PRD 4.1 项目内任务自动继承）；深度校验看「新层级 + 子树高度」而不是只看被移动那一行。移到自己的后代下要拒绝（`CONFLICT`）。
 
 ### 3.2 tasks.getNext（推荐引擎接口）
 
@@ -125,27 +126,41 @@ type NextTaskResult = {
 
 ## 4. today 今日队列
 
-对应 PRD 5.4 日终处理与今日队列。队列是 `tasks.in_today` 字段，非快照表。
+对应 PRD 5.4 日终与跨天。队列按天归属，落在 `today_entries` 表（data-model 1.1、4.4），**所有频道都必须带日期**——没有"当前队列"这种无日期的概念。
 
 | 频道 | 入参 | 返回 | 语义 |
 | --- | --- | --- | --- |
-| `today.list` | `{}` | `TodayQueueGroup[]` | 今日队列，按项目分块、块内展开子任务，见下 |
-| `today.add` | `{ taskId }` | `void` | 加入队列，记 `added_to_today` 事件 |
-| `today.remove` | `{ taskId }` | `void` | 移出队列，记 `removed_from_today` |
-| `today.reorder` | `{ orderedIds }` | `void` | 队列内排序 |
-| `today.postpone` | `{ taskId, toDate? }` | `void` | 推迟到明天或指定日期；记 `postponed` |
-| `today.returnToPool` | `{ taskId }` | `void` | 放回项目任务池（移出今日）；记 `returned_to_pool` |
+| `today.list` | `{ date }` | `TodayQueueGroup[]` | 某天的队列，按项目分块、块内展开子任务，见下 |
+| `today.add` | `{ taskId, date }` | `void` | 加入那天的队列，记 `added_to_today` 事件 |
+| `today.remove` | `{ taskId, date }` | `void` | 只移出那一天，记 `removed_from_today` |
+| `today.backlog` | `{ before }` | `TodayBacklog` | `before` 之前还没做完的遗留项，见 4.2 |
+| `today.carryOver` | `{ date, taskIds? }` | `{ carriedCount }` | 一键顺延；省略 `taskIds` 表示全部遗留 |
+| `today.reorder` | `{ date, orderedIds }` | `void` | 那天队列内排序 |
+| `today.postpone` | `{ taskId, toDate? }` | `void` | 推迟到指定日期；记 `postponed` |
+| `today.returnToPool` | `{ taskId, date }` | `void` | 放回项目任务池（移出那天）；记 `returned_to_pool` |
 | `today.abandon` | `{ taskId }` | `void` | 放弃任务；记 `abandoned` |
 | `today.split` | `{ taskId, childrenTitles: string[] }` | `Task[]` | 拆分为子任务；记 `split`，校验深度 |
 
-日终不产生"过期"状态：未处理的任务默认继续留在队列，无需任何操作。
+日终不产生"过期"状态，也**不自动搬运**：跨天时什么都不发生，没做完的事留在它原本那一天，第二天的队列天然是空的。要不要捡起来由用户点 `today.carryOver` 决定。
+
+`carryOver` 是 INSERT 而非 UPDATE：在 `date` 那天插行，原来那天的行不动，因此"当天完成的、当天有进展的都留在当日"。`UNIQUE(date, task_id)` 让它幂等；已完成的任务不进遗留清单，因此也不会被顺延。
 
 ### 4.1 `today.list` 的形状
 
 首页取消了独立的「项目进度」区域，项目改为以分块形式进入今日队列（UI 规范 2.3），所以队列不再返回扁平数组：
 
 ```ts
-type TodayQueueNode = TaskDetail & { children: TodayQueueNode[] };
+/** 这行在**它所属那一天**的状态：完成状态只有一份，但「那天有没有做完」是行级的 */
+type TodayEntryStatus =
+  | 'pending'      // 至今未完成
+  | 'done'         // 就在那天完成的
+  | 'done_later';  // 那天没做完，后来某天才完成
+
+type TodayQueueNode = TaskDetail & {
+  status: TodayEntryStatus;
+  carriedFrom?: string;   // 有值 = 这行是顺延来的，值是它最早入队的那天。只有根行会有
+  children: TodayQueueNode[];
+};
 
 type TodayQueueGroup = {
   projectId?: string;      // 空 = 散任务块
@@ -159,11 +174,26 @@ type TodayQueueGroup = {
 
 分组与排序规则，全部在领域层算好，前端只负责画：
 
-- **块内根项** = `in_today = 1` 且**祖先都不在队列**的任务。父子同时入队时只保留父级，子级作为它的下一层出现，避免同一件事出现两次。
-- **子级** = 根项的全部后代，`in_today` 为 0 的也要返回。首页要能直接看到「这件事拆开是什么」，所以 `inToday === false` 的节点表示它是被带出来的上下文，不是独立队列项。
-- **根项排序**：未完成的按 `today_sort_order`，已完成的沉到块末尾按 `done_at`（沿用「完成不消失」的规则）。
+- **块内根项** = 那天在 `today_entries` 有行、且**祖先那天都不在队列**的任务。父子同时入队时只保留父级，子级作为它的下一层出现，避免同一件事出现两次。
+- **子级** = 根项的后代中那天该露面的：没做完的一直露面，已完成的只在**它完成的那天**露面。于是顺延一个「子任务做了一半」的父任务时，昨天做完的子任务不跟到今天，今天看到的只剩没做完的分支。
+- **`status` 的算法**：未完成 → `pending`；`done_at` 落在该行日期 → `done`；`done_at` 晚于该行日期 → `done_later`（那天终究没做完，回看时要如实显示，而不是伪装成当天的成果）。
+- **计数口径**：`doneCount` 只数 `status === 'done'` 的节点，`done_later` 算在 `todoCount` 里——那天它确实没做完。
+- **根项排序**：`status !== 'done'` 的按当天的 `sort_order`，当天达成的沉到块末尾按 `done_at`（沿用「完成不消失」的规则）。
 - **子级排序**：按 `sort_order`，完成**不**沉底——子任务表达的是任务的结构，顺序一变就不好读了。
-- **块排序**：按块内未完成根项的最小 `today_sort_order`，于是用户的手动排序仍然说了算；整块做完的沉到最后。散任务块按同一规则参与排序，没有固定位置。
+- **块排序**：按块内未达成根项的最小 `sort_order`，于是用户的手动排序仍然说了算；整块做完的沉到最后。散任务块按同一规则参与排序，没有固定位置。
+
+### 4.2 `today.backlog` 的形状
+
+```ts
+type BacklogItem = TaskDetail & { queuedDate: string };  // 最早入队那天，用来说明拖了多久
+
+type TodayBacklog = {
+  items: BacklogItem[];   // 按 queuedDate 升序：拖得最久的排最前面
+  oldestDate?: string;
+};
+```
+
+进入遗留清单的条件（三条都要满足）：早于 `before` 入过队、任务至今未完成、`before` 那天**还没有**行（已经顺延过来的不算欠账）。被父任务带出来的子任务不单列——顺延父任务时它们自然跟着走。
 
 ---
 
@@ -195,7 +225,7 @@ type TodayQueueGroup = {
 | `timer.update` | `{ id, startedAt?, endedAt?, taskId?, moduleId?, note? }` | `TimeEntry` | 修改错误记录 |
 | `timer.delete` | `{ id }` | `void` | 删除记录 |
 | `timer.classify` | `{ id, taskId, moduleId? }` | `TimeEntry` | 给无任务段事后归类 |
-| `timer.listByTask` | `{ taskId }` | `TimeEntry[]` | 某任务的全部分段，按 `started_at` 升序；任务详情抽屉的计时记录分区 |
+| `timer.listByTask` | `{ taskId }` | `TimeEntry[]` | 某任务的全部分段，按 `started_at` 升序 |
 
 开始计时若已有进行中段，先结束旧段再开新段；若违反其他业务约束返回 `CONFLICT`。
 
@@ -317,7 +347,7 @@ type TimelineData = {
 
 ## 13. backup 导出与恢复
 
-对应 PRD 第 3 节与验收标准 12。两条路径。
+对应 PRD 第 3 节与验收标准 13。两条路径。
 
 | 频道 | 入参 | 返回 | 语义 |
 | --- | --- | --- | --- |

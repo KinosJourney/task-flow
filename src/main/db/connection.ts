@@ -29,6 +29,15 @@ export function getDb(): BetterSQLite3Database<typeof schema> {
   return drizzleInstance;
 }
 
+/**
+ * 换掉底层连接。用于测试：仓储层跑在真实的 SQLite 上（`:memory:`）才算验证过，
+ * 但测试环境没有 Electron 的 userData 目录，所以连接从外面注入。
+ */
+export function useSqlite(sqlite: Database.Database): void {
+  sqliteInstance = sqlite;
+  drizzleInstance = drizzle(sqlite, { schema });
+}
+
 export function closeDb(): void {
   sqliteInstance?.close();
   sqliteInstance = null;

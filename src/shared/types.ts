@@ -45,11 +45,16 @@ export interface Task {
   parentId?: string;
   depth: number;
   title: string;
+  /** 任务描述：大纲编辑器里 Shift+Enter 写的那段正文，与 notes 的批注不是一回事 */
+  description?: string;
   moduleId: ModuleId;
   isDone: boolean;
   doneAt?: number;
+  /**
+   * 今天的队列里是否有它。**派生值**，不是 tasks 表的列：队列按天归属（见 data-model 1.1），
+   * 「在队列里」必须先说是哪一天，这里固定问的是今天，供「加入/移出今日队列」这类开关用。
+   */
   inToday: boolean;
-  todaySortOrder: number;
   dueDate?: string;
   scheduledAt?: number;
   sortOrder: number;
@@ -69,12 +74,41 @@ export interface TaskNode extends Task {
 }
 
 /**
+ * 队列行在**它所属那一天**的状态。完成状态是任务级的（`is_done`/`done_at` 只有一份），
+ * 但「那天有没有做完」是行级的：同一个任务昨天没做完、今天顺延后完成，
+ * 昨天那行该显示成「当天没做完」，今天那行才是「达成」。
+ */
+export type TodayEntryStatus =
+  /** 至今未完成 */
+  | 'pending'
+  /** 就在那天完成的 */
+  | 'done'
+  /** 那天没做完，后来某天才完成 */
+  | 'done_later';
+
+/**
  * 今日队列里的一行。子级是队列任务的**全部后代**，不管后代自己有没有加入今日——
  * 首页要能直接看到「这件事拆开是什么」，而不是只看到一个笼统的父任务标题。
  * 因此 `inToday === false` 的节点表示它是被父任务带出来的上下文，不是独立队列项。
  */
 export interface TodayQueueNode extends TaskDetail {
+  status: TodayEntryStatus;
+  /** 有值说明这行是顺延来的，值是它最早出现在队列里的那天。只有根行会有 */
+  carriedFrom?: string;
   children: TodayQueueNode[];
+}
+
+export interface BacklogItem extends TaskDetail {
+  /** 最早进入队列的那天，用来说明这件事拖了多久 */
+  queuedDate: string;
+}
+
+/** 今天之前遗留的未完成队列项。顺延是手动的，所以这些东西要先被看见 */
+export interface TodayBacklog {
+  /** 按最早入队日期升序：拖得最久的排最前面 */
+  items: BacklogItem[];
+  /** 最早那天，用于「最久的一项拖了 N 天」的文案 */
+  oldestDate?: string;
 }
 
 /**
@@ -93,6 +127,16 @@ export interface TodayQueueGroup {
   doneCount: number;
 }
 
+/** `today_entries` 一行：某个任务归属某一天的队列。见 data-model 1.1 */
+export interface TodayEntry {
+  id: string;
+  /** YYYY-MM-DD */
+  date: string;
+  taskId: string;
+  /** 当天队列内的手动排序 */
+  sortOrder: number;
+}
+
 export interface TaskAncestor {
   id: string;
   title: string;
@@ -109,6 +153,7 @@ export interface TaskFull extends TaskDetail {
 
 export interface CreateTaskInput {
   title: string;
+  description?: string;
   projectId?: string;
   parentId?: string;
   moduleId?: ModuleId;
@@ -119,10 +164,43 @@ export interface CreateTaskInput {
 export interface UpdateTaskInput {
   id: string;
   title?: string;
+  description?: string | null;
   moduleId?: ModuleId;
   projectId?: string | null;
   dueDate?: string | null;
   scheduledAt?: number | null;
+}
+
+/**
+ * 改任务在树里的位置：换父级、换项目、调同级顺序。大纲编辑器的
+ * Tab / Shift+Tab 与拖拽排序都走这里，深度按整棵子树校验。
+ */
+export interface MoveTaskInput {
+  id: string;
+  /** `null` 升为顶层；省略表示不改父级。移动到父级下时项目跟随父级 */
+  parentId?: string | null;
+  /** 仅在不改父级时生效；`null` 表示变成不属于任何项目的散任务 */
+  projectId?: string | null;
+  /** 同级中的目标位置（0 基）。省略表示留在原位或放到末尾 */
+  position?: number;
+}
+
+export interface CreateProjectInput {
+  name: string;
+  goal?: string;
+  defaultModuleId: ModuleId;
+  notes?: string;
+}
+
+/** null 表示清空该可选字段，undefined 表示不改动 */
+export interface UpdateProjectInput {
+  id: string;
+  name?: string;
+  goal?: string | null;
+  defaultModuleId?: ModuleId;
+  nextActionTaskId?: string | null;
+  notes?: string | null;
+  status?: 'active' | 'archived';
 }
 
 export type NextRule =

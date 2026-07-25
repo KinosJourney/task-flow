@@ -8,6 +8,13 @@
       "when": 1784993406938,
       "tag": "0000_init_app_meta",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1784999143947,
+      "tag": "0001_yielding_salo",
+      "breakpoints": true
     }
   ]
 }

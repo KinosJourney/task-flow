@@ -1,12 +1,13 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { api, unwrap } from '@/lib/api';
-import type { CreateTaskInput, NoteKind, UpdateTaskInput } from '@shared/types';
+import { todayIso } from '@/lib/date';
+import type { CreateTaskInput, MoveTaskInput, NoteKind, UpdateTaskInput } from '@shared/types';
 
 /**
  * 改一个任务会牵动很多处展示：模块影响周复盘口径，完成状态影响项目进度与推荐，
  * 计时影响时间轴。所以任务写操作后统一失效这一批，而不是各自挑几个 key。
  */
-const TASK_SCOPE = ['task', 'taskTime', 'today', 'nextTask', 'projectTree', 'projects', 'homeSummary', 'timeline', 'timerActive'];
+const TASK_SCOPE = ['task', 'taskTime', 'today', 'backlog', 'nextTask', 'projectTree', 'projects', 'homeSummary', 'timeline', 'timerActive'];
 
 function invalidateTaskScope(qc: QueryClient) {
   for (const key of TASK_SCOPE) {
@@ -34,10 +35,29 @@ export function useNextTask(excludeTaskId?: string) {
   });
 }
 
-export function useTodayQueue() {
+/** 某天的队列。队列按天归属，所以「今日队列」也得说清是哪一天 */
+export function useTodayQueue(date: string) {
   return useQuery({
-    queryKey: ['today'],
-    queryFn: async () => unwrap(await api.today.list()),
+    queryKey: ['today', date],
+    queryFn: async () => unwrap(await api.today.list({ date })),
+  });
+}
+
+/** `before` 之前没做完的遗留项，供首页的顺延提示条 */
+export function useBacklog(before: string) {
+  return useQuery({
+    queryKey: ['backlog', before],
+    queryFn: async () => unwrap(await api.today.backlog({ before })),
+  });
+}
+
+/** 一键顺延：不传 taskIds 表示把全部遗留带到 date 那天 */
+export function useCarryOver() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (p: { date: string; taskIds?: string[] }) =>
+      unwrap(await api.today.carryOver(p)),
+    onSuccess: () => invalidateTaskScope(qc),
   });
 }
 
@@ -164,6 +184,15 @@ export function useCreateTask() {
   });
 }
 
+/** 大纲里的 Tab / ⌫ 与拖拽排序都走这里：换父级、换项目、调同级顺序 */
+export function useMoveTask() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: MoveTaskInput) => unwrap(await api.tasks.move(input)),
+    onSuccess: () => invalidateTaskScope(qc),
+  });
+}
+
 export function useDeleteTask() {
   const qc = useQueryClient();
   return useMutation({
@@ -172,12 +201,19 @@ export function useDeleteTask() {
   });
 }
 
-/** 加入/移出今日队列 */
+/** 加入/移出某天的队列，默认今天 */
 export function useToggleToday() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ taskId, inToday }: { taskId: string; inToday: boolean }) =>
-      unwrap(await (inToday ? api.today.add({ taskId }) : api.today.remove({ taskId }))),
+    mutationFn: async ({
+      taskId,
+      inToday,
+      date = todayIso(),
+    }: {
+      taskId: string;
+      inToday: boolean;
+      date?: string;
+    }) => unwrap(await (inToday ? api.today.add({ taskId, date }) : api.today.remove({ taskId, date }))),
     onSuccess: () => invalidateTaskScope(qc),
   });
 }

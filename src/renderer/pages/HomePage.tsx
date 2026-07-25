@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { Panel, PanelHeader } from '@/components/comic/Panel';
 import { DateSwitcher } from '@/components/comic/DateSwitcher';
 import { NextTaskCard } from '@/features/home/NextTaskCard';
+import { CarryOverBanner } from '@/features/home/CarryOverBanner';
 import { DayRecap } from '@/features/home/DayRecap';
 import { TodayFocus } from '@/features/home/TodayFocus';
 import { TodayQueue } from '@/features/home/TodayQueue';
@@ -40,6 +41,9 @@ export function HomePage() {
 
       {isToday ? <NextTaskCard /> : <DayRecap date={date} data={timeline} onToday={goToday} />}
 
+      {/* 遗留只在今天问「要不要带过来」；回看过去某天时该做的是逐行顺延 */}
+      {isToday && <CarryOverBanner />}
+
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <TodayFocus date={date} isToday={isToday} />
         <Panel>
@@ -74,13 +78,12 @@ export function HomePage() {
             </div>
           </div>
         </Panel>
-        {/* 队列、习惯、快速记录都是「此刻要做什么」，回看别的日期时它们只会给出今天的状态 */}
+        {/* 队列按天归属，回看时显示那天的队列；习惯与快速记录只有「今天」一种状态 */}
+        <div className="md:col-span-2">
+          <TodayQueue date={date} isToday={isToday} />
+        </div>
         {isToday && (
           <>
-            {/* 队列展开到子任务层级，横向占满一行才不会把标题挤成两行 */}
-            <div className="md:col-span-2">
-              <TodayQueue />
-            </div>
             <HabitStrip />
             <QuickCapture />
           </>

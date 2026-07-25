@@ -1,6 +1,5 @@
 import { Outlet } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
-import { TaskDetailDrawer } from '@/features/task/TaskDetailDrawer';
 
 export function AppShell() {
   return (
@@ -11,8 +10,6 @@ export function AppShell() {
           <Outlet />
         </div>
       </main>
-      {/* 任务详情抽屉叠加在任意页面之上，由 ?task=<id> 控制开合 */}
-      <TaskDetailDrawer />
     </div>
   );
 }

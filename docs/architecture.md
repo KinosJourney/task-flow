@@ -112,7 +112,7 @@ task-flow/
 │       ├── pages/
 │       ├── components/
 │       ├── features/          # 按域组织的 hooks（封装 window.api + TanStack Query）与该域的组件
-│       │   └── task/          # 任务详情抽屉：任务的唯一编辑界面（ui-spec 第 3 节）
+│       │   └── outline/       # 任务的行内大纲编辑，键位与层级规则（ui-spec 第 3 节）
 │       └── styles/
 └── tests/                     # Vitest（领域逻辑为主）
 ```

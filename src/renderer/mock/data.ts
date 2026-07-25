@@ -9,6 +9,7 @@ import type {
   ScheduleEvent,
   Task,
   TimeEntry,
+  TodayEntry,
 } from '@shared/types';
 
 export const MODULES: Module[] = [
@@ -73,41 +74,38 @@ export const PROJECTS: Project[] = [
   },
 ];
 
-export const TASKS: Task[] = [
+/** `tasks` 表的一行。`inToday` 不在其中：它是按今天查 `today_entries` 算出来的派生值 */
+export type StoredTask = Omit<Task, 'inToday'>;
+
+export const TASKS: StoredTask[] = [
   mkTask('t_next_card', 'p_togoal', undefined, 1, '实现 Next Task 主卡片交互', 'work', {
-    inToday: true,
-    todaySortOrder: 1,
     dueDate: TODAY,
   }),
+  // 昨天做完的子任务：留在昨天，顺延父任务到今天时不跟过来
   mkTask('t_card_layout', 'p_togoal', 't_next_card', 2, '主卡片的分镜布局', 'work', {
     sortOrder: 1,
     isDone: true,
-    doneAt: at(11, 30),
+    doneAt: at(11, 30, -1),
   }),
   mkTask('t_card_actions', 'p_togoal', 't_next_card', 2, '四个操作按钮的状态机', 'work', {
     sortOrder: 2,
   }),
   mkTask('t_card_swap', 'p_togoal', 't_card_actions', 3, '「换一个」的排除逻辑', 'work', {}),
-  mkTask('t_recommend', 'p_togoal', undefined, 1, '打磨推荐理由的气泡文案', 'work', {
-    inToday: true,
-    todaySortOrder: 2,
-  }),
+  mkTask('t_recommend', 'p_togoal', undefined, 1, '打磨推荐理由的气泡文案', 'work', {}),
   mkTask('t_progress', 'p_togoal', undefined, 1, '项目进度按叶子任务计算', 'work', {
     isDone: true,
     doneAt: at(12, 0, -1),
   }),
   mkTask('t_timeline', 'p_togoal', undefined, 1, '时间轴区分计划与实际', 'work', {}),
-  mkTask('t_fur_layout', 'p_furdiary', undefined, 1, '设计日记卡片的分镜布局', 'hobby', {
-    inToday: true,
-    todaySortOrder: 3,
-  }),
+  mkTask('t_fur_layout', 'p_furdiary', undefined, 1, '设计日记卡片的分镜布局', 'hobby', {}),
   mkTask('t_fur_export', 'p_furdiary', undefined, 1, '导出为图片', 'hobby', {}),
   mkTask('t_cheki_scan', 'p_cheki', undefined, 1, '扫描本月新增拍立得', 'hobby', {}),
-  mkTask('t_run', undefined, undefined, 1, '慢跑 3 公里', 'sport', {
-    inToday: true,
-    todaySortOrder: 4,
+  mkTask('t_run', undefined, undefined, 1, '慢跑 3 公里', 'sport', {}),
+  // 昨天入队没做完，今天顺延后才完成：昨天那行是 done_later，今天那行是 done
+  mkTask('t_read', undefined, undefined, 1, '读《重构》一章', 'growth', {
+    isDone: true,
+    doneAt: now - 20 * MIN,
   }),
-  mkTask('t_read', undefined, undefined, 1, '读《重构》一章', 'growth', { inToday: true, todaySortOrder: 5 }),
 ];
 
 function mkTask(
@@ -117,8 +115,8 @@ function mkTask(
   depth: number,
   title: string,
   moduleId: Task['moduleId'],
-  opts: Partial<Task>,
-): Task {
+  opts: Partial<StoredTask>,
+): StoredTask {
   return {
     id,
     projectId,
@@ -127,14 +125,30 @@ function mkTask(
     title,
     moduleId,
     isDone: false,
-    inToday: false,
-    todaySortOrder: 0,
     sortOrder: 0,
     createdAt: now - 5 * 24 * HOUR,
     updatedAt: now,
     ...opts,
   };
 }
+
+/**
+ * 今日队列按天归属（data-model 1.1）：任务在哪天的队列里出现过就永久留在那天的画面里。
+ * 顺延不是把行搬过来，而是在新的一天插一行——所以 `t_next_card` 与 `t_read` 各有两行。
+ * 前天的 `t_timeline` 与昨天的 `t_cheki_scan` 至今未完成，构成今天要手动顺延的遗留。
+ */
+export const TODAY_ENTRIES: TodayEntry[] = [
+  { id: 'q_b1', date: DAY_BEFORE, taskId: 't_timeline', sortOrder: 1 },
+  { id: 'q_y1', date: YESTERDAY, taskId: 't_progress', sortOrder: 1 },
+  { id: 'q_y2', date: YESTERDAY, taskId: 't_next_card', sortOrder: 2 },
+  { id: 'q_y3', date: YESTERDAY, taskId: 't_cheki_scan', sortOrder: 3 },
+  { id: 'q_y4', date: YESTERDAY, taskId: 't_read', sortOrder: 4 },
+  { id: 'q_t1', date: TODAY, taskId: 't_next_card', sortOrder: 1 },
+  { id: 'q_t2', date: TODAY, taskId: 't_recommend', sortOrder: 2 },
+  { id: 'q_t3', date: TODAY, taskId: 't_fur_layout', sortOrder: 3 },
+  { id: 'q_t4', date: TODAY, taskId: 't_run', sortOrder: 4 },
+  { id: 'q_t5', date: TODAY, taskId: 't_read', sortOrder: 5 },
+];
 
 export const NOTES: Note[] = [
   {
