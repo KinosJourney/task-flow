@@ -10,6 +10,7 @@ import type {
   Note,
   NextTaskResult,
   Project,
+  ProjectDetail,
   ProjectWithProgress,
   Task,
   TaskAncestor,
@@ -512,6 +513,21 @@ export const mockApi: Api = {
       const status = p?.status ?? 'active';
       return ok(PROJECTS.filter((x) => x.status === status).map(toProjectWithProgress));
     },
+    async get(p) {
+      await delay();
+      const project = PROJECTS.find((x) => x.id === p.id);
+      if (!project) return fail('NOT_FOUND', '项目不存在');
+      const taskIds = new Set(TASKS.filter((t) => t.projectId === project.id).map((t) => t.id));
+      const nextAction = project.nextActionTaskId
+        ? TASKS.find((t) => t.id === project.nextActionTaskId)
+        : undefined;
+      return ok<ProjectDetail>({
+        ...toProjectWithProgress(project),
+        tree: buildTree(project.id),
+        nextAction: nextAction && toTask(nextAction),
+        taskNotes: NOTES.filter((n) => n.taskId && taskIds.has(n.taskId)),
+      });
+    },
     async create(p) {
       await delay(60);
       const now = Date.now();
@@ -846,6 +862,7 @@ export const mockApi: Api = {
         content: p.content,
         url: p.url,
         createdAt: Date.now(),
+        updatedAt: Date.now(),
       };
       NOTES.push(note);
       return ok(note);
@@ -857,6 +874,7 @@ export const mockApi: Api = {
       if (p.content !== undefined) note.content = p.content;
       // null 表示清空，undefined 表示不改动
       if (p.url !== undefined) note.url = p.url ?? undefined;
+      note.updatedAt = Date.now();
       return ok(note);
     },
     async delete(p) {
@@ -898,6 +916,7 @@ export const mockApi: Api = {
         kind: p.kind ?? 'note',
         content: p.content,
         createdAt: Date.now(),
+        updatedAt: Date.now(),
       };
       NOTES.unshift(note);
       return ok(note);

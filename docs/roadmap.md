@@ -72,6 +72,10 @@ flowchart LR
 
 **映射 AC**：AC-7（进度按叶子自动计算）。为 AC-1 / AC-2 铺设 `task_events`。
 
+**状态：已完成**。五张业务表与 8 个模块的 seed 随启动迁移落地；`projects.*`（含 `get` 一次带回任务树、下一步与项目内批注）、`tasks.*`、`notes.*` 全部接到真实 IPC，`getNext`/`pinNext` 留给 M2。三级上限在 `depth CHECK` 与 `planReparent` 两处把关，越界返回 `DEPTH_EXCEEDED`。`/projects` 可建可归档，`/projects/:id` 的大纲支持行内加行、改层级、写描述、挂批注与想法转任务。写失败统一走漫画风 toast（`ui-spec` 第 7 节）。
+
+M1 未接的两处都因为依赖 M2 的表：`totalTimeMs` 恒为 0（等 `time_entries`），`inToday` 恒为 false（等 `today_entries`）。首页与外围页面的 UI 已提前铺好，但数据仍来自 mock，按里程碑逐个换成真实频道。
+
 ---
 
 ## M2 今日三件事 + 今日队列 + Next Task 推荐 + 计时（核心闭环）

@@ -13,6 +13,7 @@ import type {
   NextTaskResult,
   PingResult,
   Project,
+  ProjectDetail,
   ProjectWithProgress,
   ScheduleEvent,
   Task,
@@ -49,6 +50,7 @@ export const CHANNELS = {
   modulesList: 'modules.list',
 
   projectsList: 'projects.list',
+  projectsGet: 'projects.get',
   projectsCreate: 'projects.create',
   projectsUpdate: 'projects.update',
   projectsArchive: 'projects.archive',
@@ -87,8 +89,9 @@ export interface Api {
     list(): Promise<IpcResult<import('./types').Module[]>>;
   };
   projects: {
-    /** 列表即详情的数据源：进度与累计时间都在这里，详情页再配一次 tasks.tree 就够了 */
     list(p?: { status?: 'active' | 'archived' }): Promise<IpcResult<ProjectWithProgress[]>>;
+    /** 详情页一次取齐：列表那份进度之外还带任务树、下一步与项目内批注 */
+    get(p: { id: string }): Promise<IpcResult<ProjectDetail>>;
     create(p: CreateProjectInput): Promise<IpcResult<Project>>;
     update(p: UpdateProjectInput): Promise<IpcResult<Project>>;
     /** 归档而非删除：任务与历史时间都留着，只是不再出现在活跃列表 */
@@ -97,7 +100,7 @@ export interface Api {
   };
   tasks: {
     tree(p: { projectId: string }): Promise<IpcResult<TaskNode[]>>;
-    /** 任务详情抽屉的数据源：一次拉齐批注、计时汇总、直接子级与祖先面包屑 */
+    /** 单个任务一次拉齐：批注、计时汇总、直接子级与祖先面包屑 */
     get(p: { id: string }): Promise<IpcResult<TaskFull>>;
     getNext(p: { now: number; excludeTaskId?: string }): Promise<IpcResult<NextTaskResult>>;
     create(p: CreateTaskInput): Promise<IpcResult<Task>>;
@@ -135,7 +138,7 @@ export interface Api {
     active(): Promise<IpcResult<TimeEntry | null>>;
     start(p: { taskId?: string; now: number }): Promise<IpcResult<TimeEntry>>;
     stop(p: { now: number }): Promise<IpcResult<TimeEntry | null>>;
-    /** 某任务的全部计时分段，供任务详情抽屉的计时记录分区 */
+    /** 某任务的全部计时分段，按 startedAt 升序 */
     listByTask(p: { taskId: string }): Promise<IpcResult<TimeEntry[]>>;
   };
   schedule: {

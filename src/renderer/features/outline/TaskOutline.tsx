@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { moduleOf } from '@/lib/format';
+import type { Note } from '@shared/types';
+import { TaskNotes, type NoteActions } from './TaskNotes';
 import { KEY_HINT, useOutlineKeys, type OutlineActions, type OutlineRow } from './useOutlineKeys';
 
 interface TaskOutlineProps {
@@ -9,6 +11,12 @@ interface TaskOutlineProps {
   focusTaskId?: string | null;
   onFocusConsumed?: () => void;
   emptyHint?: string;
+  /**
+   * 按任务分好桶的批注。两个都传才渲染批注区——首页队列只关心今天要做什么，
+   * 不在那里挂批注（PRD 6.3 的次级区域里没有它）。
+   */
+  notesByTask?: Map<string, Note[]>;
+  noteActions?: NoteActions;
 }
 
 type OutlineKeys = ReturnType<typeof useOutlineKeys>;
@@ -20,6 +28,8 @@ export function TaskOutline({
   focusTaskId,
   onFocusConsumed,
   emptyHint = '按 Enter 或点这里开始写',
+  notesByTask,
+  noteActions,
 }: TaskOutlineProps) {
   const keys = useOutlineKeys({ rows, actions });
   const container = useRef<HTMLDivElement>(null);
@@ -47,8 +57,8 @@ export function TaskOutline({
       ) : (
         <div className="flex flex-col gap-0.5">
           {rows.map((row) => (
-            <div key={row.id} style={{ paddingLeft: row.indent * 22 }}>
-              <div className="group/row flex items-center gap-2">
+            <div key={row.id} className="group/row" style={{ paddingLeft: row.indent * 22 }}>
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => actions.toggleDone(row.id, !row.isDone)}
@@ -63,6 +73,13 @@ export function TaskOutline({
                 <OutlineTitle row={row} keys={keys} />
               </div>
               {keys.hasDescription(row) && <OutlineDescription row={row} keys={keys} />}
+              {noteActions && (
+                <TaskNotes
+                  taskId={row.id}
+                  notes={notesByTask?.get(row.id) ?? []}
+                  actions={noteActions}
+                />
+              )}
             </div>
           ))}
         </div>

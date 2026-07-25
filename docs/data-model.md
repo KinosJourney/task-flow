@@ -129,6 +129,7 @@ CREATE TABLE tasks (
   parent_id         TEXT REFERENCES tasks(id),
   depth             INTEGER NOT NULL DEFAULT 1 CHECK (depth BETWEEN 1 AND 3),
   title             TEXT NOT NULL,
+  description       TEXT,                            -- 大纲里 Shift+Enter 写的那段说明，一个任务一份
   module_id         TEXT NOT NULL REFERENCES modules(id), -- 默认继承项目，单任务可改
   is_done           INTEGER NOT NULL DEFAULT 0,
   done_at           INTEGER,                         -- 完成时刻；「哪天完成的」由它派生
@@ -149,6 +150,7 @@ CREATE INDEX idx_tasks_parent  ON tasks(parent_id);
 - 三级限制由 `depth CHECK` + 应用层在插入时按 `parent.depth + 1` 计算共同保证。
 - **进度计算**（验收标准 7）：项目进度 = 已完成叶子任务数 ÷ 全部叶子任务数。叶子 = `tasks` 中不作为任何其他任务 `parent_id` 的行。父级任务、备注、想法、问题、链接均不参与（备注等不在 `tasks` 表，见 4.9）。第一版所有叶子权重相同。
 - PRD 4.3 提到"第四层及更深的粘贴内容默认识别为备注"：导入时超过 3 级的行落 `notes`，不落 `tasks`（见第 11 节导入）。
+- `description` 是任务本身的说明，只有一份；`notes` 里的批注是可以有很多条、能转成任务的碎片。两者不要混（ui-spec 3.3）。
 
 ### 4.4 today_entries 今日队列（按天归属）
 
@@ -340,7 +342,7 @@ CREATE INDEX idx_weeklygoals_week ON weekly_goals(week_start);
 CREATE TABLE task_events (
   id          TEXT PRIMARY KEY,
   task_id     TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
-  type        TEXT NOT NULL,   -- created/completed/reopened/added_to_today/removed_from_today
+  type        TEXT NOT NULL,   -- created/completed/reopened/moved/added_to_today/removed_from_today
                                -- /postponed/returned_to_pool/split/abandoned
   payload     TEXT,            -- JSON，视事件类型而定（如推迟到的日期）
   created_at  INTEGER NOT NULL

@@ -88,7 +88,8 @@ export function SettingsPage() {
       <Panel>
         <PanelHeader title="关于" icon="ℹ️" />
         <div className="p-4 text-sm text-ink-soft">
-          TaskFlow · 桌面端个人任务执行应用 · M0 骨架：数据库已接通，业务数据仍来自 mock。
+          TaskFlow · 桌面端个人任务执行应用 · M1：项目、三级任务、批注与进度已落在本机数据库，
+          今日队列与计时等仍是 mock 样例（M2）。
         </div>
       </Panel>
     </div>

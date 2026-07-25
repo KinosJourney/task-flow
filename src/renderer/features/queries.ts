@@ -1,13 +1,20 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { api, unwrap } from '@/lib/api';
 import { todayIso } from '@/lib/date';
-import type { CreateTaskInput, MoveTaskInput, NoteKind, UpdateTaskInput } from '@shared/types';
+import type {
+  CreateProjectInput,
+  CreateTaskInput,
+  MoveTaskInput,
+  NoteKind,
+  UpdateProjectInput,
+  UpdateTaskInput,
+} from '@shared/types';
 
 /**
  * 改一个任务会牵动很多处展示：模块影响周复盘口径，完成状态影响项目进度与推荐，
  * 计时影响时间轴。所以任务写操作后统一失效这一批，而不是各自挑几个 key。
  */
-const TASK_SCOPE = ['task', 'taskTime', 'today', 'backlog', 'nextTask', 'projectTree', 'projects', 'homeSummary', 'timeline', 'timerActive'];
+const TASK_SCOPE = ['task', 'taskTime', 'today', 'backlog', 'nextTask', 'project', 'projects', 'homeSummary', 'timeline', 'timerActive'];
 
 function invalidateTaskScope(qc: QueryClient) {
   for (const key of TASK_SCOPE) {
@@ -90,11 +97,44 @@ export function useProjects() {
   });
 }
 
-export function useProjectTree(projectId: string) {
+/** 项目详情：进度、任务树、下一步与项目内批注一次取齐，详情页不必分几次闪 */
+export function useProject(projectId: string) {
   return useQuery({
-    queryKey: ['projectTree', projectId],
-    queryFn: async () => unwrap(await api.tasks.tree({ projectId })),
+    queryKey: ['project', projectId],
+    queryFn: async () => unwrap(await api.projects.get({ id: projectId })),
+    enabled: Boolean(projectId),
+    retry: false,
   });
+}
+
+function useProjectMutation<T>(mutationFn: (input: T) => Promise<unknown>) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn,
+    onSuccess: () => {
+      for (const key of ['projects', 'project', 'homeSummary']) {
+        void qc.invalidateQueries({ queryKey: [key] });
+      }
+    },
+  });
+}
+
+export function useCreateProject() {
+  return useProjectMutation(async (input: CreateProjectInput) =>
+    unwrap(await api.projects.create(input)),
+  );
+}
+
+/** 改名/目标/默认模块/下一步/笔记都走这里，字段级即时保存 */
+export function useUpdateProject() {
+  return useProjectMutation(async (patch: UpdateProjectInput) =>
+    unwrap(await api.projects.update(patch)),
+  );
+}
+
+/** 归档而非删除：任务与历史时间都留着，只是不再出现在活跃列表 */
+export function useArchiveProject() {
+  return useProjectMutation(async (id: string) => unwrap(await api.projects.archive({ id })));
 }
 
 export function useHabits() {
@@ -125,24 +165,6 @@ export function useWeekList() {
   });
 }
 
-/** 任务详情抽屉的数据源；taskId 为空时不发请求 */
-export function useTask(taskId: string | null) {
-  return useQuery({
-    queryKey: ['task', taskId],
-    queryFn: async () => unwrap(await api.tasks.get({ id: taskId! })),
-    enabled: Boolean(taskId),
-    retry: false,
-  });
-}
-
-export function useTaskTimeEntries(taskId: string | null) {
-  return useQuery({
-    queryKey: ['taskTime', taskId],
-    queryFn: async () => unwrap(await api.timer.listByTask({ taskId: taskId! })),
-    enabled: Boolean(taskId),
-  });
-}
-
 export function useActiveTimer() {
   return useQuery({
     queryKey: ['timerActive'],
@@ -167,7 +189,7 @@ export function useReopenTask() {
   });
 }
 
-/** 字段级即时保存：抽屉里没有保存按钮，每次改动都是一次 update */
+/** 字段级即时保存：大纲里没有保存按钮，每次改动都是一次 update */
 export function useUpdateTask() {
   const qc = useQueryClient();
   return useMutation({
@@ -243,6 +265,15 @@ export function useCreateNote() {
   });
 }
 
+export function useUpdateNote() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { id: string; content?: string; url?: string | null }) =>
+      unwrap(await api.notes.update(input)),
+    onSuccess: () => invalidateTaskScope(qc),
+  });
+}
+
 export function useDeleteNote() {
   const qc = useQueryClient();
   return useMutation({
@@ -251,7 +282,7 @@ export function useDeleteNote() {
   });
 }
 
-/** 想法/问题转为正式任务，返回新任务以便抽屉切过去 */
+/** 想法/问题转为正式任务，新任务落在原任务所属的项目里 */
 export function useConvertNoteToTask() {
   const qc = useQueryClient();
   return useMutation({

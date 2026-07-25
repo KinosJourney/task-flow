@@ -1,7 +1,7 @@
 import { asc, eq, inArray } from 'drizzle-orm';
 import type { Note, NoteKind } from '@shared/types';
 import { getDb } from '../db/connection';
-import { notes } from '../db/schema';
+import { notes, tasks } from '../db/schema';
 import { AppError } from '../errors';
 import { newId, type DbLike } from './db';
 
@@ -16,6 +16,7 @@ export function toNote(row: NoteRow): Note {
     url: row.url ?? undefined,
     convertedTaskId: row.convertedTaskId ?? undefined,
     createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
   };
 }
 
@@ -27,6 +28,18 @@ export function listNotesByTask(taskId: string, db: DbLike = getDb()): Note[] {
     .orderBy(asc(notes.createdAt))
     .all()
     .map(toNote);
+}
+
+/** 项目内所有任务的批注。详情页一次画完整棵大纲的批注，不必逐行再查 */
+export function listNotesByProject(projectId: string, db: DbLike = getDb()): Note[] {
+  return db
+    .select({ note: notes })
+    .from(notes)
+    .innerJoin(tasks, eq(notes.taskId, tasks.id))
+    .where(eq(tasks.projectId, projectId))
+    .orderBy(asc(notes.createdAt))
+    .all()
+    .map((row) => toNote(row.note));
 }
 
 /** 一次取多个任务的批注，避免任务列表逐个查（N+1） */

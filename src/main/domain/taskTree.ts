@@ -48,7 +48,7 @@ export function buildTree<T extends TaskLike>(tasks: T[]): TreeOf<T>[] {
   return expand(undefined);
 }
 
-/** 根到父的链条，供抽屉的面包屑用 */
+/** 根到父的链条，供面包屑用 */
 export function ancestorsOf<T extends TaskLike>(tasks: T[], taskId: string): T[] {
   const byId = new Map(tasks.map((t) => [t.id, t]));
   const chain: T[] = [];

@@ -1,4 +1,5 @@
 import { Outlet } from 'react-router-dom';
+import { Toaster } from '@/components/comic/Toaster';
 import { Sidebar } from './Sidebar';
 
 export function AppShell() {
@@ -10,6 +11,7 @@ export function AppShell() {
           <Outlet />
         </div>
       </main>
+      <Toaster />
     </div>
   );
 }

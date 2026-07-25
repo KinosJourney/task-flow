@@ -18,6 +18,7 @@ const api: PartialApi = {
   },
   projects: {
     list: (p) => ipcRenderer.invoke(CHANNELS.projectsList, p),
+    get: (p) => ipcRenderer.invoke(CHANNELS.projectsGet, p),
     create: (p) => ipcRenderer.invoke(CHANNELS.projectsCreate, p),
     update: (p) => ipcRenderer.invoke(CHANNELS.projectsUpdate, p),
     archive: (p) => ipcRenderer.invoke(CHANNELS.projectsArchive, p),

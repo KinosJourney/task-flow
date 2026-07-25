@@ -3,6 +3,7 @@ import type {
   CreateProjectInput,
   ModuleId,
   Project,
+  ProjectDetail,
   ProjectWithProgress,
   UpdateProjectInput,
 } from '@shared/types';
@@ -11,7 +12,9 @@ import { projects } from '../db/schema';
 import { emptyProgress, progressByProject } from '../domain/progress';
 import { AppError } from '../errors';
 import { newId, type DbLike } from './db';
-import { listProgressTasks } from './tasks';
+import { listNotesByProject } from './notes';
+import { findTask, listProgressTasks, listTaskTree } from './tasks';
+import { projectTimeTotals } from './timeEntries';
 
 type ProjectRow = typeof projects.$inferSelect;
 
@@ -37,9 +40,8 @@ function getRow(id: string, db: DbLike = getDb()): ProjectRow {
 }
 
 /**
- * 项目列表带实时进度。进度与累计时间都不落库（data-model 第 5 节），
- * 每次按叶子任务现算——落成可变字段迟早会和任务对不上。
- * `totalTimeMs` 要等 M2 的 time_entries 才有来源，先恒为 0。
+ * 项目列表带实时进度与累计时间。两者都不落库（data-model 第 5 节），
+ * 每次现算——落成可变字段迟早会和任务、计时段对不上。
  */
 export function listProjects(status: 'active' | 'archived' = 'active'): ProjectWithProgress[] {
   const rows = getDb()
@@ -50,11 +52,31 @@ export function listProjects(status: 'active' | 'archived' = 'active'): ProjectW
     .all();
 
   const progress = progressByProject(listProgressTasks());
+  const time = projectTimeTotals();
   return rows.map((row) => ({
     ...toProject(row),
     progress: progress.get(row.id) ?? emptyProgress(),
-    totalTimeMs: 0,
+    totalTimeMs: time.get(row.id) ?? 0,
   }));
+}
+
+/**
+ * 项目详情：列表里那份进度之外，再带上任务树、下一步指向的任务和项目内批注。
+ * 一次取齐是因为详情页这三块要同时画出来，分成三个频道只会让页面分三次闪。
+ * `nextActionTaskId` 可能指向已删除的任务（那一列没有外键），所以查不到就当没有。
+ */
+export function getProject(id: string): ProjectDetail {
+  const db = getDb();
+  const row = getRow(id, db);
+
+  return {
+    ...toProject(row),
+    progress: progressByProject(listProgressTasks()).get(row.id) ?? emptyProgress(),
+    totalTimeMs: projectTimeTotals().get(row.id) ?? 0,
+    tree: listTaskTree(row.id),
+    nextAction: row.nextActionTaskId ? findTask(row.nextActionTaskId, db) : undefined,
+    taskNotes: listNotesByProject(row.id, db),
+  };
 }
 
 export function createProject(input: CreateProjectInput): Project {

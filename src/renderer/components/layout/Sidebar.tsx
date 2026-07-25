@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import { Mascot } from '@/components/assistant/Mascot';
+import { isElectron } from '@/lib/api';
 
 const NAV = [
   { to: '/', label: '首页', icon: '🎯', end: true },
@@ -46,7 +47,7 @@ export function Sidebar() {
       <div className="mt-auto px-2 text-[11px] leading-relaxed text-ink-soft">
         本机版 · 数据不上云
         <br />
-        UI 预览（mock 数据）
+        {isElectron ? '项目与任务已落库，其余为样例' : 'UI 预览（mock 数据）'}
       </div>
     </aside>
   );

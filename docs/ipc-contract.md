@@ -51,9 +51,17 @@ type ProjectWithProgress = Project & {
   progress: { doneLeaves: number; totalLeaves: number; ratio: number };
   totalTimeMs: number;
 };
+
+type ProjectDetail = ProjectWithProgress & {
+  tree: TaskNode[];        // 项目下的三级任务树
+  nextAction?: Task;       // nextActionTaskId 指向的任务，指针悬空时没有这个字段
+  taskNotes: Note[];       // 项目内各任务下的批注
+};
 ```
 
 进度与时间由领域层实时计算（见 `data-model.md` 第 5 节），不从库里读可变字段。
+
+详情页那三块要同时画出来，所以 `projects.get` 一次取齐而不是让前端再配几个频道，否则页面会分几次闪。批注字段叫 `taskNotes`：`Project.notes` 已经是项目自己的一段说明文字，两者不是一回事。`nextActionTaskId` 那一列没有外键，指向的任务被删掉时当作没指定，不报 `NOT_FOUND`。
 
 ---
 
@@ -63,11 +71,11 @@ type ProjectWithProgress = Project & {
 | --- | --- | --- | --- |
 | `tasks.tree` | `{ projectId }` | `TaskNode[]` | 项目下的三级任务树 |
 | `tasks.get` | `{ id }` | `TaskDetail` | 任务详情（含 notes、计时汇总） |
-| `tasks.create` | `CreateTaskInput` | `Task` | 新建；有 `parentId` 时校验 `depth<=3`，否则 `DEPTH_EXCEEDED`；`afterId` 表示插到某行之后 |
+| `tasks.create` | `CreateTaskInput` | `Task` | 新建；有 `parentId` 时校验 `depth<=3`，否则 `DEPTH_EXCEEDED`。没有插入位参数，新行落在同级末尾，要插到中间由随后的 `tasks.move` 负责 |
 | `tasks.update` | `{ id } & Partial<...>` | `Task` | 改标题/模块/截止/日程/所属项目 |
 | `tasks.complete` | `{ id }` | `Task` | 标记完成，记 `completed` 事件；返回后前端可请求下一个 |
 | `tasks.reopen` | `{ id }` | `Task` | 取消完成 |
-| `tasks.move` | `{ id, parentId?, projectId?, sortOrder? }` | `Task` | 移动层级/项目/排序，校验深度 |
+| `tasks.move` | `{ id, parentId?, projectId?, position? }` | `Task` | 移动层级/项目/排序，校验深度。`position` 是同级中的目标位置（0 基） |
 | `tasks.delete` | `{ id }` | `void` | 删除（级联子任务与 notes） |
 | `tasks.getNext` | `GetNextInput` | `NextTaskResult` | **核心**：推荐下一件任务 + 结构化理由 |
 | `tasks.pinNext` | `{ id: string \| null }` | `void` | 手动指定 Next Task（优先于全部自动规则）；`null` 取消指定 |

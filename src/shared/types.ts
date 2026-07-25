@@ -39,6 +39,18 @@ export interface ProjectWithProgress extends Project {
   totalTimeMs: number;
 }
 
+/**
+ * 项目详情页一次拉齐的形状：任务树、下一步、项目内批注。
+ * 批注叫 `taskNotes` 而不是 `notes`——`Project.notes` 已经是项目自己的一段说明文字，
+ * 这里装的是项目内各个任务下的批注（`notes` 表），两者不是一回事。
+ */
+export interface ProjectDetail extends ProjectWithProgress {
+  tree: TaskNode[];
+  /** `nextActionTaskId` 指向的任务；指针为空时没有这个字段 */
+  nextAction?: Task;
+  taskNotes: Note[];
+}
+
 export interface Task {
   id: string;
   projectId?: string;
@@ -143,8 +155,8 @@ export interface TaskAncestor {
 }
 
 /**
- * 任务详情抽屉一次拉齐所需的形状：在 TaskDetail 之上补直接子级与祖先面包屑。
- * 只取一层子级——抽屉只展示直接子任务，更深的层级由被点开的子任务自己展示。
+ * 单个任务一次拉齐的形状：在 TaskDetail 之上补直接子级与祖先面包屑。
+ * 只取一层子级，更深的层级由子任务自己那次查询提供。
  */
 export interface TaskFull extends TaskDetail {
   children: Task[];
@@ -286,6 +298,7 @@ export interface Note {
   url?: string;
   convertedTaskId?: string;
   createdAt: number;
+  updatedAt: number;
 }
 
 export interface TimelineData {

@@ -1,4 +1,5 @@
 import { addDays, todayIso } from '@/lib/date';
+import { MODULE_SEED } from '@shared/modules';
 import type {
   DailyFocus,
   Habit,
@@ -12,16 +13,8 @@ import type {
   TodayEntry,
 } from '@shared/types';
 
-export const MODULES: Module[] = [
-  { id: 'work', name: '工作', color: '#ff5d5d', sortOrder: 1 },
-  { id: 'hobby', name: '兴趣', color: '#ff9f43', sortOrder: 2 },
-  { id: 'growth', name: '个人提升', color: '#5b8def', sortOrder: 3 },
-  { id: 'sport', name: '运动', color: '#22c1a4', sortOrder: 4 },
-  { id: 'diet', name: '饮食', color: '#f6c445', sortOrder: 5 },
-  { id: 'expense', name: '支出', color: '#a66cff', sortOrder: 6 },
-  { id: 'social', name: '人际', color: '#ff6fb5', sortOrder: 7 },
-  { id: 'other', name: '其他', color: '#8a94a6', sortOrder: 8 },
-];
+/** 八个模块不编样例数据：真实的那份就在 `@shared/modules`，数据库也按它对齐 */
+export const MODULES: Module[] = MODULE_SEED.map((m) => ({ ...m }));
 
 const now = Date.now();
 const HOUR = 3600_000;
@@ -157,6 +150,7 @@ export const NOTES: Note[] = [
     kind: 'idea',
     content: '主卡片完成时来个「达成！」的拟声词分镜。',
     createdAt: now - 2 * HOUR,
+    updatedAt: now - 2 * HOUR,
   },
   {
     id: 'n2',
@@ -164,13 +158,15 @@ export const NOTES: Note[] = [
     kind: 'question',
     content: '「换一个」要不要限制次数？',
     createdAt: now - 1 * HOUR,
+    updatedAt: now - 1 * HOUR,
   },
   {
     id: 'n3',
-    taskId: 't_next_card',
+    taskId: 't_card_actions',
     kind: 'note',
     content: '卡片内不要放网点，装饰只留在卡片外围。',
     createdAt: now - 40 * MIN,
+    updatedAt: now - 40 * MIN,
   },
   {
     id: 'n4',
@@ -179,6 +175,7 @@ export const NOTES: Note[] = [
     content: '分镜排版参考',
     url: 'https://example.com/comic-panel-layout',
     createdAt: now - 20 * MIN,
+    updatedAt: now - 20 * MIN,
   },
 ];
 

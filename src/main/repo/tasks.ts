@@ -1,4 +1,5 @@
 import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
+import { todayIso } from '@shared/date';
 import { FALLBACK_MODULE_ID } from '@shared/modules';
 import type {
   CreateTaskInput,
@@ -20,19 +21,49 @@ import {
   subtreeIds,
   type TaskLike,
 } from '../domain/taskTree';
+import type { QueueTask } from '../domain/todayQueue';
 import { AppError } from '../errors';
 import { newId, type DbLike } from './db';
+import { focusSlotByTask } from './dailyFocus';
 import { clearConvertedPointers, getNote, listNotesByTask, markNoteConverted } from './notes';
+import { enqueue, queuedTaskIdsOn } from './queueRows';
 import { recordTaskEvent } from './taskEvents';
+import { detachTaskRefs, taskTimeTotals } from './timeEntries';
 
 type TaskRow = typeof tasks.$inferSelect;
 
 /**
- * 行 -> 领域对象。`inToday` 与 `totalTimeMs` 在 M1 恒为默认值：
- * 队列归属（today_entries）与计时区间（time_entries）都是 M2 的表，
- * 这里先给出契约要求的形状，等表建好再接上真实来源。
+ * `Task`/`TaskDetail` 上有四样是派生值（data-model 第 5 节），分别来自四张表。
+ * 一棵任务树几十行，逐行去查就是几十次往返，所以先一次性把这些查完再逐行组装。
  */
-function toTask(row: TaskRow): Task {
+interface DetailContext {
+  /** 今天的队列里有哪些任务，用来定 `inToday` */
+  queuedToday: Set<string>;
+  timeTotals: Map<string, number>;
+  focusSlots: Map<string, number>;
+  projectNames: Map<string, string>;
+}
+
+/**
+ * `inToday` 问的固定是今天（队列按天归属，「在队列里」必须先说哪一天）；
+ * `focusDate` 只影响 `linkedFocusSlot`——回看某天的队列时，要显示那天的三件事关联。
+ */
+function loadContext(db: DbLike = getDb(), focusDate = todayIso()): DetailContext {
+  return {
+    queuedToday: queuedTaskIdsOn(todayIso(), db),
+    timeTotals: taskTimeTotals(Date.now(), db),
+    focusSlots: focusSlotByTask(focusDate, db),
+    projectNames: new Map(
+      db
+        .select()
+        .from(projects)
+        .all()
+        .map((row) => [row.id, row.name]),
+    ),
+  };
+}
+
+function toTask(row: TaskRow, ctx: DetailContext): Task {
   return {
     id: row.id,
     projectId: row.projectId ?? undefined,
@@ -43,7 +74,7 @@ function toTask(row: TaskRow): Task {
     moduleId: row.moduleId as ModuleId,
     isDone: row.isDone,
     doneAt: row.doneAt ?? undefined,
-    inToday: false,
+    inToday: ctx.queuedToday.has(row.id),
     dueDate: row.dueDate ?? undefined,
     scheduledAt: row.scheduledAt ?? undefined,
     sortOrder: row.sortOrder,
@@ -119,23 +150,43 @@ function nextSortOrder(db: DbLike, parentId: string | null, projectId: string | 
   return rows.reduce((max, row) => Math.max(max, row.sortOrder), 0) + 1;
 }
 
-function projectNameOf(projectId: string | null, db: DbLike = getDb()): string | undefined {
-  if (!projectId) return undefined;
-  return db.select().from(projects).where(eq(projects.id, projectId)).get()?.name;
+function toTaskDetail(row: TaskRow, ctx: DetailContext, db: DbLike = getDb()): TaskDetail {
+  return {
+    ...toTask(row, ctx),
+    projectName: row.projectId ? ctx.projectNames.get(row.projectId) : undefined,
+    totalTimeMs: ctx.timeTotals.get(row.id) ?? 0,
+    notes: listNotesByTask(row.id, db),
+    linkedFocusSlot: ctx.focusSlots.get(row.id),
+  };
 }
 
 /**
- * TaskDetail 比 Task 多出展示所需的三样。`totalTimeMs` 与 `linkedFocusSlot`
- * 分别要等 time_entries 与 daily_focus（M2）才有真实来源。
+ * 把任务 id 变成一行队列/遗留清单要展示的 `TaskDetail`。今日队列那边一次要组装
+ * 几十行，所以派生值先批量查好（`loadContext`），这里只做逐行拼装。
  */
-function toTaskDetail(row: TaskRow, db: DbLike = getDb()): TaskDetail {
-  return {
-    ...toTask(row),
-    projectName: projectNameOf(row.projectId, db),
-    totalTimeMs: 0,
-    notes: listNotesByTask(row.id, db),
-    linkedFocusSlot: undefined,
+export function createDetailResolver(
+  focusDate: string,
+  db: DbLike = getDb(),
+): (taskId: string) => TaskDetail {
+  const ctx = loadContext(db, focusDate);
+  const rows = new Map(allRows(db).map((row) => [row.id, row]));
+  return (taskId: string) => {
+    const row = rows.get(taskId);
+    if (!row) throw new AppError('NOT_FOUND', '任务不存在');
+    return toTaskDetail(row, ctx, db);
   };
+}
+
+/** 队列结构计算要的最小任务形状（domain/todayQueue） */
+export function listQueueTasks(db: DbLike = getDb()): QueueTask[] {
+  return allRows(db).map((row) => ({
+    id: row.id,
+    parentId: row.parentId ?? undefined,
+    projectId: row.projectId ?? undefined,
+    isDone: row.isDone,
+    doneAt: row.doneAt ?? undefined,
+    sortOrder: row.sortOrder,
+  }));
 }
 
 export function getTask(id: string): TaskFull {
@@ -143,16 +194,17 @@ export function getTask(id: string): TaskFull {
   const row = getRow(id, db);
   const rows = allRows(db);
   const titles = new Map(rows.map((r) => [r.id, r.title]));
+  const ctx = loadContext(db);
 
   return {
-    ...toTaskDetail(row, db),
+    ...toTaskDetail(row, ctx, db),
     children: db
       .select()
       .from(tasks)
       .where(eq(tasks.parentId, id))
       .orderBy(asc(tasks.sortOrder))
       .all()
-      .map(toTask),
+      .map((child) => toTask(child, ctx)),
     ancestors: ancestorsOf(rows.map(toTaskLike), id).map((a) => ({
       id: a.id,
       title: titles.get(a.id) ?? '',
@@ -160,10 +212,21 @@ export function getTask(id: string): TaskFull {
   };
 }
 
+/**
+ * 按 id 取任务，取不到返回 undefined。给项目「下一步」这类可能悬空的指针用：
+ * 指针指向的任务被删了不算错误，只是没有下一步了。
+ */
+export function findTask(id: string, db: DbLike = getDb()): Task | undefined {
+  const row = db.select().from(tasks).where(eq(tasks.id, id)).get();
+  return row ? toTask(row, loadContext(db)) : undefined;
+}
+
 /** 项目下的三级任务树 */
 export function listTaskTree(projectId: string): TaskNode[] {
-  const rows = getDb().select().from(tasks).where(eq(tasks.projectId, projectId)).all();
-  return buildTree(rows.map(toTask));
+  const db = getDb();
+  const ctx = loadContext(db);
+  const rows = db.select().from(tasks).where(eq(tasks.projectId, projectId)).all();
+  return buildTree(rows.map((row) => toTask(row, ctx)));
 }
 
 /** 进度计算的数据源：全量取一次，按项目分桶算，避免每个项目查一次库 */
@@ -212,7 +275,12 @@ export function createTask(input: CreateTaskInput): Task {
 
     tx.insert(tasks).values(row).run();
     recordTaskEvent(row.id, 'created', undefined, tx);
-    return toTask(row);
+    // 大纲里新建时勾了「加入今日」的，直接进今天那天的队列
+    if (input.inToday) {
+      enqueue(row.id, todayIso(), tx);
+      recordTaskEvent(row.id, 'added_to_today', { date: todayIso() }, tx);
+    }
+    return toTask(row, loadContext(tx));
   });
 }
 
@@ -253,7 +321,7 @@ export function updateTask(input: UpdateTaskInput): Task {
     }
 
     tx.update(tasks).set(patch).where(eq(tasks.id, row.id)).run();
-    return toTask(getRow(row.id, tx));
+    return toTask(getRow(row.id, tx), loadContext(tx));
   });
 }
 
@@ -304,7 +372,7 @@ export function moveTask(input: MoveTaskInput): Task {
       resequence(tx, oldParentId, oldProjectId);
     }
 
-    return toTask(getRow(row.id, tx));
+    return toTask(getRow(row.id, tx), loadContext(tx));
   });
 }
 
@@ -317,7 +385,7 @@ export function setTaskDone(id: string, done: boolean): Task {
       .where(eq(tasks.id, id))
       .run();
     recordTaskEvent(id, done ? 'completed' : 'reopened', undefined, tx);
-    return toTask(getRow(id, tx));
+    return toTask(getRow(id, tx), loadContext(tx));
   });
 }
 
@@ -333,6 +401,12 @@ export function deleteTask(id: string): void {
       .where(inArray(projects.nextActionTaskId, ids))
       .run();
     clearConvertedPointers(ids, tx);
+    /*
+     * 计时记录不跟着删，只把 task_id 置空：那些时间确实投入过，而 module_id 是
+     * 当时的快照，留着历史统计口径才不会因为删任务而变（data-model 1.2）。
+     * 队列行与三件事关联是 ON DELETE CASCADE，交给外键处理。
+     */
+    detachTaskRefs(ids, tx);
 
     // 自底向上删：parent_id 外键是立即校验的，先删父级会让子级悬空
     for (const taskId of [...ids].reverse()) {

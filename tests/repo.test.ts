@@ -5,8 +5,8 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { getDb, useSqlite } from '@main/db/connection';
 import { seedModules } from '@main/db/seedModules';
 import { listModules } from '@main/repo/modules';
-import { createProject, listProjects, updateProject } from '@main/repo/projects';
-import { createNote, listNotesByTask } from '@main/repo/notes';
+import { createProject, getProject, listProjects, updateProject } from '@main/repo/projects';
+import { createNote, listNotesByProject, listNotesByTask } from '@main/repo/notes';
 import {
   convertNoteToTask,
   createTask,
@@ -74,6 +74,49 @@ describe('项目', () => {
 
   it('空名字被拒绝', () => {
     expect(() => createProject({ name: '   ', defaultModuleId: 'work' })).toThrowError(/不能为空/);
+  });
+});
+
+describe('项目详情', () => {
+  it('一次带回任务树、下一步与项目内批注', () => {
+    const p = project();
+    const a = createTask({ title: 'a', projectId: p.id });
+    const b = createTask({ title: 'b', parentId: a.id });
+    createNote({ taskId: b.id, kind: 'idea', content: '想到一个点子' });
+    updateProject({ id: p.id, nextActionTaskId: b.id });
+
+    const detail = getProject(p.id);
+    expect(detail.tree.map((t) => t.title)).toEqual(['a']);
+    expect(detail.tree[0].children.map((t) => t.title)).toEqual(['b']);
+    expect(detail.nextAction?.id).toBe(b.id);
+    expect(detail.taskNotes.map((n) => n.content)).toEqual(['想到一个点子']);
+    expect(detail.progress).toEqual({ doneLeaves: 0, totalLeaves: 1, ratio: 0 });
+  });
+
+  it('别的项目与散任务的批注不会串进来', () => {
+    const p1 = project('ToGoal');
+    const p2 = createProject({ name: 'FurDiary', defaultModuleId: 'hobby' });
+    const inP1 = createTask({ title: 'a', projectId: p1.id });
+    const inP2 = createTask({ title: 'b', projectId: p2.id });
+    createNote({ taskId: inP1.id, kind: 'note', content: '属于 ToGoal' });
+    createNote({ taskId: inP2.id, kind: 'note', content: '属于 FurDiary' });
+    createNote({ kind: 'note', content: '随手记的，不挂任务' });
+
+    expect(listNotesByProject(p1.id).map((n) => n.content)).toEqual(['属于 ToGoal']);
+    expect(getProject(p2.id).taskNotes.map((n) => n.content)).toEqual(['属于 FurDiary']);
+  });
+
+  it('下一步指向的任务被删掉后当作没指定，而不是报错', () => {
+    const p = project();
+    const a = createTask({ title: 'a', projectId: p.id });
+    updateProject({ id: p.id, nextActionTaskId: a.id });
+
+    deleteTask(a.id);
+    expect(getProject(p.id).nextAction).toBeUndefined();
+  });
+
+  it('项目不存在时报 NOT_FOUND', () => {
+    expect(() => getProject('p_nope')).toThrowError(/项目不存在/);
   });
 });
 

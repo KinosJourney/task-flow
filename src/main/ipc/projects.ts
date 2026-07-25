@@ -9,6 +9,7 @@ import {
 import {
   archiveProject,
   createProject,
+  getProject,
   listProjects,
   reorderProjects,
   updateProject,
@@ -19,6 +20,7 @@ export function registerProjectHandlers(): void {
   registerHandler(CHANNELS.projectsList, listProjectsInput, (input) =>
     listProjects(input?.status ?? 'active'),
   );
+  registerHandler(CHANNELS.projectsGet, idInput, (input) => getProject(input.id));
   registerHandler(CHANNELS.projectsCreate, createProjectInput, (input) => createProject(input));
   registerHandler(CHANNELS.projectsUpdate, updateProjectInput, (input) => updateProject(input));
   registerHandler(CHANNELS.projectsArchive, idInput, (input) => archiveProject(input.id));

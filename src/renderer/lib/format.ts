@@ -1,5 +1,5 @@
-import { MODULES } from '@/mock/data';
-import type { ModuleId } from '@shared/types';
+import { FALLBACK_MODULE_ID, MODULE_SEED } from '@shared/modules';
+import type { Module, ModuleId } from '@shared/types';
 
 export function formatDuration(ms: number): string {
   if (ms <= 0) return '0m';
@@ -35,6 +35,12 @@ export function toDatetimeLocalValue(ts?: number): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-export function moduleOf(id: ModuleId) {
-  return MODULES.find((m) => m.id === id) ?? MODULES[MODULES.length - 1];
+/**
+ * 模块的名字与颜色。取自 `@shared/modules` 这唯一的事实来源——数据库的 modules 表
+ * 每次启动都按它对齐（seedModules.ts），所以同步拿常量与异步查库的结果一致，
+ * 而画一个模块色点不必先等一次 IPC。
+ */
+export function moduleOf(id: ModuleId): Module {
+  const fallback = MODULE_SEED.find((m) => m.id === FALLBACK_MODULE_ID)!;
+  return MODULE_SEED.find((m) => m.id === id) ?? fallback;
 }
