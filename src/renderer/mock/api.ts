@@ -756,6 +756,63 @@ export const mockApi: Api = {
       for (const item of wanted) enqueue(item.id, p.date);
       return ok({ carriedCount: wanted.length });
     },
+    async reorder(p) {
+      await delay(60);
+      p.orderedIds.forEach((taskId, index) => {
+        const entry = TODAY_ENTRIES.find((e) => e.date === p.date && e.taskId === taskId);
+        if (entry) entry.sortOrder = index + 1;
+      });
+      return ok(undefined);
+    },
+    async postpone(p) {
+      await delay(60);
+      const task = TASKS.find((t) => t.id === p.taskId);
+      if (!task) return fail('NOT_FOUND', '任务不存在');
+      removeWhere(TODAY_ENTRIES, (e) => e.taskId === p.taskId && e.date === p.date);
+      enqueue(p.taskId, p.toDate ?? TODAY);
+      return ok(undefined);
+    },
+    async returnToPool(p) {
+      await delay(60);
+      const task = TASKS.find((t) => t.id === p.taskId);
+      if (!task) return fail('NOT_FOUND', '任务不存在');
+      removeWhere(TODAY_ENTRIES, (e) => e.taskId === p.taskId && e.date === p.date);
+      return ok(undefined);
+    },
+    async abandon(p) {
+      await delay(60);
+      const task = TASKS.find((t) => t.id === p.taskId);
+      if (!task) return fail('NOT_FOUND', '任务不存在');
+      removeWhere(TODAY_ENTRIES, (e) => e.taskId === p.taskId && e.date === p.date);
+      return ok(undefined);
+    },
+    async split(p) {
+      await delay(60);
+      const parent = TASKS.find((t) => t.id === p.taskId);
+      if (!parent) return fail('NOT_FOUND', '任务不存在');
+      if (parent.depth >= 3) return fail('DEPTH_EXCEEDED', '任务最多三级，再往下的内容请记为备注');
+
+      const created: Task[] = [];
+      for (const title of p.childrenTitles.map((t) => t.trim()).filter(Boolean)) {
+        const siblings = TASKS.filter((t) => t.parentId === parent.id);
+        const child: StoredTask = {
+          id: `t_${Date.now()}_${created.length}`,
+          projectId: parent.projectId,
+          parentId: parent.id,
+          depth: parent.depth + 1,
+          title,
+          moduleId: parent.moduleId,
+          isDone: false,
+          sortOrder: siblings.length + 1,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        };
+        TASKS.push(child);
+        created.push(toTask(child));
+      }
+      enqueue(parent.id, p.date ?? TODAY);
+      return ok(created);
+    },
   },
   focus: {
     async getDay(p) {
@@ -784,6 +841,13 @@ export const mockApi: Api = {
       };
       FOCUS.push(created);
       return ok(created);
+    },
+    async linkTasks(p) {
+      await delay(60);
+      const focus = FOCUS.find((f) => f.id === p.focusId);
+      if (!focus) return fail('NOT_FOUND', '这件事还没填写');
+      focus.taskIds = [...new Set(p.taskIds)];
+      return ok(undefined);
     },
     async toggleDone(p) {
       await delay(60);
@@ -827,6 +891,43 @@ export const mockApi: Api = {
       return ok<TimeEntry[]>(
         TIME_ENTRIES.filter((t) => t.taskId === p.taskId).sort((a, b) => a.startedAt - b.startedAt),
       );
+    },
+    async addManual(p) {
+      await delay(60);
+      if (p.endedAt <= p.startedAt) return fail('VALIDATION', '结束时间要晚于开始时间');
+      const task = p.taskId ? TASKS.find((t) => t.id === p.taskId) : undefined;
+      if (p.taskId && !task) return fail('NOT_FOUND', '任务不存在');
+      const entry: TimeEntry = {
+        id: `te_${Date.now()}`,
+        taskId: task?.id,
+        moduleId: p.moduleId ?? task?.moduleId,
+        startedAt: p.startedAt,
+        endedAt: p.endedAt,
+        source: 'manual',
+        note: p.note,
+      };
+      TIME_ENTRIES.push(entry);
+      return ok(entry);
+    },
+    async update(p) {
+      await delay(60);
+      const entry = TIME_ENTRIES.find((t) => t.id === p.id);
+      if (!entry) return fail('NOT_FOUND', '这条计时记录不存在');
+      if (p.startedAt !== undefined) entry.startedAt = p.startedAt;
+      if (p.endedAt !== undefined) entry.endedAt = p.endedAt;
+      if (p.taskId !== undefined) entry.taskId = p.taskId ?? undefined;
+      if (p.moduleId !== undefined) entry.moduleId = p.moduleId ?? undefined;
+      if (p.note !== undefined) entry.note = p.note ?? undefined;
+      return ok(entry);
+    },
+    async delete(p) {
+      await delay(60);
+      if (!TIME_ENTRIES.some((t) => t.id === p.id)) return fail('NOT_FOUND', '这条计时记录不存在');
+      removeWhere(TIME_ENTRIES, (t) => t.id === p.id);
+      return ok(undefined);
+    },
+    async classify(p) {
+      return this.update(p);
     },
   },
   schedule: {

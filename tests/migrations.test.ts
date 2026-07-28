@@ -42,12 +42,23 @@ describe('drizzle 迁移', () => {
     }
   });
 
+  it('M2 的核心表都建出来了', () => {
+    const sql = allMigrationSql();
+    for (const table of ['today_entries', 'time_entries', 'daily_focus', 'daily_focus_tasks']) {
+      expect(sql).toContain(`CREATE TABLE \`${table}\``);
+    }
+  });
+
   it('三级限制落在数据库上，不只靠应用层校验', () => {
     expect(allMigrationSql()).toMatch(/CHECK\("tasks"\."depth" between 1 and 3\)/);
   });
 
   it('队列归属不做成 tasks 的列（data-model 1.1：队列按天归属）', () => {
     expect(allMigrationSql()).not.toContain('`in_today`');
+  });
+
+  it('同一天同一任务只能入队一次（顺延幂等）', () => {
+    expect(allMigrationSql()).toContain('CREATE UNIQUE INDEX `today_entries_date_task`');
   });
 });
 

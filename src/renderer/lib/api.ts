@@ -20,9 +20,18 @@ function mergeApi(base: Api, real: PartialApi): Api {
   return merged as unknown as Api;
 }
 
-export const api: Api = mergeApi(mockApi, window.api ?? {});
+/**
+ * Vitest 默认跑在 node 环境，没有 `window`。`unwrap` 等纯函数会从这里被测到，
+ * 所以读 `window.api` 前必须先判断——浏览器/Electron 里照常走真实桥。
+ */
+function preloadApi(): PartialApi {
+  if (typeof window === 'undefined') return {};
+  return window.api ?? {};
+}
 
-export const isElectron = Boolean(window.api);
+export const api: Api = mergeApi(mockApi, preloadApi());
+
+export const isElectron = typeof window !== 'undefined' && Boolean(window.api);
 
 export function unwrap<T>(result: IpcResult<T>): T {
   if (result.ok) return result.data;

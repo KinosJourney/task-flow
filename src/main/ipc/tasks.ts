@@ -2,10 +2,13 @@ import { CHANNELS } from '@shared/ipc';
 import { idInput } from '@shared/schema/common';
 import {
   createTaskInput,
+  getNextInput,
   moveTaskInput,
+  pinNextInput,
   taskTreeInput,
   updateTaskInput,
 } from '@shared/schema/tasks';
+import { getNextTask, pinNextTask } from '../repo/nextTask';
 import {
   createTask,
   deleteTask,
@@ -27,5 +30,9 @@ export function registerTaskHandlers(): void {
   registerHandler(CHANNELS.tasksReopen, idInput, (input) => setTaskDone(input.id, false));
   registerHandler(CHANNELS.tasksDelete, idInput, (input) => {
     deleteTask(input.id);
+  });
+  registerHandler(CHANNELS.tasksGetNext, getNextInput, (input) => getNextTask(input));
+  registerHandler(CHANNELS.tasksPinNext, pinNextInput, (input) => {
+    pinNextTask(input.id);
   });
 }

@@ -10,7 +10,7 @@ export const createTaskInput = z
     projectId: id.optional(),
     parentId: id.optional(),
     moduleId: moduleId.optional(),
-    /** M2 的今日队列才会用到；M1 收下但不落库 */
+    /** 新建时是否直接进今天的队列 */
     inToday: z.boolean().optional(),
   })
   .strict();
@@ -35,3 +35,13 @@ export const moveTaskInput = z
     position: z.number().int().min(0).optional(),
   })
   .strict();
+
+export const getNextInput = z
+  .object({
+    now: z.number().int(),
+    excludeTaskId: id.optional(),
+  })
+  .strict();
+
+/** `id: null` 取消手动指定，回到自动推荐 */
+export const pinNextInput = z.object({ id: id.nullable() }).strict();

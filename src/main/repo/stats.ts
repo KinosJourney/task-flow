@@ -31,15 +31,17 @@ export function getTimeline(date: string): TimelineData {
     .select()
     .from(timeEntries)
     .all()
-    .map((row) => ({ ...row, endedAt: row.endedAt ?? Date.now() }))
-    .filter((row) => row.startedAt < to && row.endedAt > from)
+    .filter((row) => {
+      const end = row.endedAt ?? Date.now();
+      return row.startedAt < to && end > from;
+    })
     .map((row) => ({
       id: row.id,
       taskId: row.taskId ?? undefined,
       moduleId: (row.moduleId as ModuleId | null) ?? undefined,
       startedAt: Math.max(row.startedAt, from),
-      // 还在计时的段裁到当天末尾时不该显示成「已结束」，交给前端按 active 状态画
-      endedAt: Math.min(row.endedAt, to),
+      // 进行中的段不裁结束时刻：前端按 active 状态画速度线；已结束的裁到当天边界内
+      endedAt: row.endedAt === null ? undefined : Math.min(row.endedAt, to),
       source: row.source,
       note: row.note ?? undefined,
     }))

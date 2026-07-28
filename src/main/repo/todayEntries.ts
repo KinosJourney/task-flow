@@ -108,16 +108,16 @@ export function reorderToday(input: { date: string; orderedIds: string[] }): voi
 }
 
 /**
- * 推迟到指定日期：从原来那天移出，插到目标那天。默认明天。
- * 这是日终处理里唯一会「搬走」原来那行的操作——用户明确说了今天不做。
+ * 推迟到指定日期：从 `date` 那天移出，插到目标那天。默认明天。
+ * 这是日终处理里唯一会「搬走」原来那行的操作——用户明确说了那天不做。
  */
-export function postponeTask(input: { taskId: string; fromDate: string; toDate?: string }): void {
+export function postponeTask(input: { taskId: string; date: string; toDate?: string }): void {
   const toDate = input.toDate ?? todayIso();
   getDb().transaction((tx) => {
     requireTask(input.taskId, tx);
-    dequeue(input.taskId, input.fromDate, tx);
+    dequeue(input.taskId, input.date, tx);
     enqueue(input.taskId, toDate, tx);
-    recordTaskEvent(input.taskId, 'postponed', { from: input.fromDate, to: toDate }, tx);
+    recordTaskEvent(input.taskId, 'postponed', { from: input.date, to: toDate }, tx);
   });
 }
 

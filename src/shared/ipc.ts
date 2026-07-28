@@ -64,6 +64,33 @@ export const CHANNELS = {
   tasksComplete: 'tasks.complete',
   tasksReopen: 'tasks.reopen',
   tasksDelete: 'tasks.delete',
+  tasksGetNext: 'tasks.getNext',
+  tasksPinNext: 'tasks.pinNext',
+
+  todayList: 'today.list',
+  todayAdd: 'today.add',
+  todayRemove: 'today.remove',
+  todayBacklog: 'today.backlog',
+  todayCarryOver: 'today.carryOver',
+  todayReorder: 'today.reorder',
+  todayPostpone: 'today.postpone',
+  todayReturnToPool: 'today.returnToPool',
+  todayAbandon: 'today.abandon',
+  todaySplit: 'today.split',
+
+  focusGetDay: 'focus.getDay',
+  focusSet: 'focus.set',
+  focusLinkTasks: 'focus.linkTasks',
+  focusToggleDone: 'focus.toggleDone',
+
+  timerActive: 'timer.active',
+  timerStart: 'timer.start',
+  timerStop: 'timer.stop',
+  timerListByTask: 'timer.listByTask',
+  timerAddManual: 'timer.addManual',
+  timerUpdate: 'timer.update',
+  timerDelete: 'timer.delete',
+  timerClassify: 'timer.classify',
 
   notesListByTask: 'notes.listByTask',
   notesCreate: 'notes.create',
@@ -71,6 +98,10 @@ export const CHANNELS = {
   notesDelete: 'notes.delete',
   notesConvertToTask: 'notes.convertToTask',
   notesQuickCapture: 'notes.quickCapture',
+
+  statsHomeSummary: 'stats.homeSummary',
+  statsTimeline: 'stats.timeline',
+  statsModuleTime: 'stats.moduleTime',
 } as const;
 
 export type Channel = (typeof CHANNELS)[keyof typeof CHANNELS];
@@ -125,6 +156,16 @@ export interface Api {
      * 省略 `taskIds` 表示把 `date` 之前的全部遗留一次带过来。
      */
     carryOver(p: { date: string; taskIds?: string[] }): Promise<IpcResult<{ carriedCount: number }>>;
+    reorder(p: { date: string; orderedIds: string[] }): Promise<IpcResult<void>>;
+    /** 从 `date` 那天移出，插到 `toDate`（省略则今天） */
+    postpone(p: { taskId: string; date: string; toDate?: string }): Promise<IpcResult<void>>;
+    returnToPool(p: { taskId: string; date: string }): Promise<IpcResult<void>>;
+    abandon(p: { taskId: string; date: string }): Promise<IpcResult<void>>;
+    split(p: {
+      taskId: string;
+      childrenTitles: string[];
+      date?: string;
+    }): Promise<IpcResult<Task[]>>;
   };
   focus: {
     getDay(p: { date: string }): Promise<IpcResult<DailyFocus[]>>;
@@ -132,6 +173,8 @@ export interface Api {
     set(p: { date: string; slot: number; content?: string; projectId?: string }): Promise<
       IpcResult<DailyFocus>
     >;
+    /** 关联任务是覆盖式的：传进来的这批就是最终结果 */
+    linkTasks(p: { focusId: string; taskIds: string[] }): Promise<IpcResult<void>>;
     toggleDone(p: { focusId: string; isDone: boolean }): Promise<IpcResult<DailyFocus>>;
   };
   timer: {
@@ -140,6 +183,23 @@ export interface Api {
     stop(p: { now: number }): Promise<IpcResult<TimeEntry | null>>;
     /** 某任务的全部计时分段，按 startedAt 升序 */
     listByTask(p: { taskId: string }): Promise<IpcResult<TimeEntry[]>>;
+    addManual(p: {
+      taskId?: string;
+      startedAt: number;
+      endedAt: number;
+      moduleId?: ModuleId;
+      note?: string;
+    }): Promise<IpcResult<TimeEntry>>;
+    update(p: {
+      id: string;
+      startedAt?: number;
+      endedAt?: number;
+      taskId?: string | null;
+      moduleId?: ModuleId | null;
+      note?: string | null;
+    }): Promise<IpcResult<TimeEntry>>;
+    delete(p: { id: string }): Promise<IpcResult<void>>;
+    classify(p: { id: string; taskId: string; moduleId?: ModuleId }): Promise<IpcResult<TimeEntry>>;
   };
   schedule: {
     listRange(p: { from: number; to: number }): Promise<IpcResult<ScheduleEvent[]>>;
